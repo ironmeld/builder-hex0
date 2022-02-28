@@ -1,0 +1,22 @@
+----------------------------------------------------------------------
+Unless otherwise noted in this file, all files in this project are
+Copyright 2022 Richard R. Masters and Contributors
+
+Unless otherwise noted in this file, all files are available for license
+under the Apache License, Version 2.0 [1] and Boost 1.0 license [2],
+at your option.
+
+Under the definitions of the Apache 2.0 license:
+Unless You explicitly state otherwise, any Contribution intentionally
+submitted for inclusion in the Work by You to the Licensor shall be under the
+terms and conditions of the Licenses above, without any additional terms
+or conditions. (Per the second sentence of Section 5 of the Apache 2.0 license,
+this term for contributions is not superseded by the first sentence of
+Section 5 of the Apache 2.0 license.)
+
+1. See file LICENSE-APACHE
+   Original at https://www.apache.org/licenses/LICENSE-2.0
+2  See file LICENSE-Boost
+   Original at https://opensource.org/licenses/BSL-1.0
+
+----------------------------------------------------------------------
