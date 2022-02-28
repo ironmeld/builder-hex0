@@ -18,3 +18,29 @@ cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > builder-hex0.img
 
 * cut will strip comments starting with pound or semicolon.
 * xxd converts hex to binary.
+
+## Machine Requirements
+
+* x86_64 processor starting in 16-bit real mode
+* PC compatible-BIOS
+
+## The Hex0 Builder Operating System
+TBD
+
+## The Hex0 Builder Standard Library
+TBD
+
+## The Hex0 Language
+TBD
+
+## The Hex0 Compiler
+TBD
+
+## The Hex0 Shell
+TBD
+
+## How to Build
+TBD
+
+## Wish List for the Next System
+TBD

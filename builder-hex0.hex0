@@ -8,10 +8,24 @@
 # hex0 is a "language" for binary encoding in hexadecimal
 # with support for comments.
 #
+# Hand assembled using this reference:
+# http://www.mathemainzel.info/files/x86asmref.html
 #
-
+# Expected Load Address: 7C00
+#
 # byte offset 0:
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+BB 00 07  # mov bx, 0007  # text page 00, light grey on black 07
+B4 0E     # mov ah, 0x0e
+B0 48     # mov al, 'H'
+CD 10     # int 0x10
+B0 57     # mov al, 'W'
+CD 10     # int 0x10
+F4        # hlt
+#
+# End of Program.
+
+00 00 00 00 00 00
+# byte offset 20 / 0x14:
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
