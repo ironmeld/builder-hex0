@@ -22,7 +22,7 @@
 # do that first. Setting CS to zero requires a long jump so we
 # jump to a routine (just past the globals) that will initialize
 # the rest of the registers.
-EA 85 7C 00 00 # JMP 00007C8A  jmp _init_registers
+EA 80 7C 00 00 # JMP 00007C80  jmp _init_registers
 
 
 # ------------------------------------------------------------
