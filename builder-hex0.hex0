@@ -37,16 +37,16 @@ EA 85 7C 00 00 # JMP 00007C8A  jmp _init_registers
 # Global functions
 
 #[7C40]
-# :_kern_reboot
-# :_syscall_reboot
-# :reboot
-EA F0 FF 00 F0  # ljmp $F000:FFF0
-
-#[7C45]
 # :_kern_halt
 # :_syscall_halt
 # :halt
 FA F4
+
+#[7C42]
+# :_kern_reboot
+# :_syscall_reboot
+# :reboot
+EA F0 FF 00 F0  # ljmp $F000:FFF0
 
 #[7C47]
 # Reserved for global functions
@@ -73,13 +73,13 @@ FA F4
 #:main
 
 # we have no way to build now, so halt
-9A 45 7C 00 00 # CALL 00007C45  call halt()
+9A 40 7C 00 00  # CALL 00007C40  call halt()
 
 # otherwise we would run the build here
 
 #[7C8B]
 # after a build occurs, invoke transition
-9A 40 7C 00 00 # CALL 00007C40  call reboot()
+9A 42 7C 00 00  # CALL 00007C42  call reboot()
 
 # END Program Body
 
