@@ -22,13 +22,29 @@
 # do that first. Setting CS to zero requires a long jump so we
 # jump to a routine (just past the globals) that will initialize
 # the rest of the registers.
-EA 80 7C 00 00 # JMP 00007C80  jmp _init_registers
+EA C0 7C 00 00 # JMP 00007CC0  jmp _init_registers
 
 
 # ------------------------------------------------------------
 # Reserved for global data
 #[7C05]
-               00 00 00 00 00 00 00 00 00 00 00
+#H  a  l  t  i  n  g  .  .  . \r \n \0
+48 61 6C 74 69 6E 67 2E 2E 2E 0D 0A 00
+
+#[7C12]
+#R  e  b  o  o  t  i  n  g  .  .  . \r \n \0
+52 65 62 6F 6F 74 69 6E 67 2E 2E 2E 0D 0A 00
+
+#[7C21]
+#N  o     S  o  u  r  c  e    f   o  u  n  d  . \r \n \0
+4E 6F 20 73 6F 75 72 63 65 20 66 6F 75 6E 64 2E 0D 0A 00
+
+#[7C34]
+#B  u  i  l  d     F  i  n  i  s  h  e  d  . \r \n \0
+42 75 69 6C 64 20 66 69 6E 69 73 68 65 64 2E 0D 0A 00
+
+#[7C46]
+                  00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
@@ -36,24 +52,27 @@ EA 80 7C 00 00 # JMP 00007C80  jmp _init_registers
 # ------------------------------------------------------------
 # Global functions
 
-#[7C40]
+# ------------------------
+#[7C80]
 #:_kern_halt
 #:_syscall_halt
 #:halt
 FA  # cli
 F4  # hlt
 
-#[7C42]
+# ------------------------
+#[7C82]
 #:_kern_reboot
 #:_syscall_reboot
 #:reboot
 EA F0 FF 00 F0  # ljmp $F000:FFF0
 
-#[7C47]
-#:fputc
-#:_syscall_fputc(al=c)
-# modifies: ah
+# ------------------------
+#[7C87]
+#:_syscall_putc(al=c)
+#:putc
 53        # PUSH_BX
+50        # PUSH_AX
 
 # Prepare to use BIOS tty output interrupt.
 # Specify text page 00, 0 black background, 7 light grey text
@@ -62,12 +81,26 @@ BB 00 07  # LOADI16_BX 0007
 B4 0E     # LOADI8_AH  0E
 CD 10     # INT_10
 
+58        # POP_AX
 5B        # POP_BX
 CB        # RETF
 
-#[7C51]
+# ------------------------
+#[7C93]
+#puts(ds:si = string)
+#_puts_loop:
+AC              # lodsb
+84 C0           # test al, al
+74 07           # jz end_loop
+9A 87 7C 00 00  # CALL 00007C87  call putc
+EB F4           # jmp _puts_loop
+#:end_loop
+CB              # RETF
+
+# ------------------------
 # Reserved for global functions
-   00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+#[7CA0]
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
@@ -76,51 +109,44 @@ CB        # RETF
 # We far jump here after entry to initialize the CS register.
 # So this our real entry point. We initialize the registers
 # and drop into main().
-#[7C80]
+#[7CC0]
 #:_init_registers
 31 C0     # xor ax, ax
 8E D8     # COPY_AX_to_DS
 8E C0     # COPY_AX_to_ES
 
 
-#[7C86]
+#[7CC6]
 # ------------------------------------------------------------
 # Main Program Body
 #:main
 
-B0 4F           # LOADI8_AL 'O'
-9A 47 7C 00 00  # CALL 00007C47  call fputc
-B0 4B           # LOADI8_AL 'K'
-9A 47 7C 00 00  # CALL 00007C47  call fputc
-B0 0D           # LOADI8_AL '\r'
-9A 47 7C 00 00  # CALL 00007C47  call fputc
-B0 0A           # LOADI8_AL '\n'
-9A 47 7C 00 00  # CALL 00007C47  call fputc
-B0 2E           # LOADI8_AL '.'
-9A 47 7C 00 00  # CALL 00007C47  call fputc
-B0 0D           # LOADI8_AL '\r'
-9A 47 7C 00 00  # CALL 00007C47  call fputc
-B0 0A           # LOADI8_AL '\n'
-9A 47 7C 00 00  # CALL 00007C47  call fputc
+EB 15
+
+BE 21 7C        # mov si, 0x7C05
+9A 93 7C 00 00  # CALL 00007C93  puts("No source found.")
 
 # we have no way to build now, so halt
-9A 40 7C 00 00  # CALL 00007C40  call halt()
+BE 05 7C        # mov si, 0x7C20 
+9A 93 7C 00 00  # CALL 00007C93  puts("Halting...")
+9A 80 7C 00 00  # CALL 00007C80  halt()
 
 # otherwise we would run the build here
 
+BE 34 7C        # mov si, 0x7C34
+9A 93 7C 00 00  # CALL 00007C93  puts("Build finished.")
+
 # after a build occurs, invoke transition
-9A 42 7C 00 00  # CALL 00007C42  call reboot()
+BE 12 7C        # mov si, 0x7C12
+9A 93 7C 00 00  # CALL 00007C93  puts("Rebooting...")
+9A 82 7C 00 00  # CALL 00007C82  reboot()
 
 # END Program Body
 
 # ------------------------------------------------------------
 # This is the rest of the MBR.
 
-#[7CC1]
-   00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+      00 00 00 00 00 00 00 00 00 00 00 00 00 00
 #[7D00]
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
