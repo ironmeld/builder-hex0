@@ -20,12 +20,13 @@
 # uses xxd to convert hex to binary
 builder-hex0.img: builder-hex0.hex0
 	cut $^ -f1 -d'#' | cut -f1 -d';' | xxd -r -p > $@
+	[ `wc -c builder-hex0.img | cut -f1 -d' '` = "1024" ]
 
 clean:
 	rm -f builder-hex0.img
 
 run: builder-hex0.img
-	qemu-system-x86_64 -nographic -drive file=builder-hex0.img,format=raw
+	qemu-system-x86_64 -nographic -no-reboot -drive file=builder-hex0.img,format=raw
 
 # Make does not check whether PHONY targets already exist as files or dirs.
 # It just invokes their recipes when they are targeted, no questions asked.

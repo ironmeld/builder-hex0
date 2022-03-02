@@ -21,14 +21,19 @@ cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > builder-hex0.img
 
 ## Machine Requirements
 
-* x86_64 processor starting in 16-bit real mode
+* `x86_64` processor starting in 16-bit real mode
 * PC compatible-BIOS
+
+To run the image under `qemu-system-x86_64`:
+```
+make run
+```
 
 ## The Hex0 Builder Operating System
 TBD
 
 ## The Hex0 Builder Standard Library
-TBD
+reboot() - does not return
 
 ## The Hex0 Language
 TBD
