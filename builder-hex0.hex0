@@ -37,21 +37,37 @@ EA 80 7C 00 00 # JMP 00007C80  jmp _init_registers
 # Global functions
 
 #[7C40]
-# :_kern_halt
-# :_syscall_halt
-# :halt
-FA F4
+#:_kern_halt
+#:_syscall_halt
+#:halt
+FA  # cli
+F4  # hlt
 
 #[7C42]
-# :_kern_reboot
-# :_syscall_reboot
-# :reboot
+#:_kern_reboot
+#:_syscall_reboot
+#:reboot
 EA F0 FF 00 F0  # ljmp $F000:FFF0
 
 #[7C47]
+#:fputc
+#:_syscall_fputc(al=c)
+# modifies: ah
+53        # PUSH_BX
+
+# Prepare to use BIOS tty output interrupt.
+# Specify text page 00, 0 black background, 7 light grey text
+BB 00 07  # LOADI16_BX 0007
+# Specify the `write character` BIOS routine
+B4 0E     # LOADI8_AH  0E
+CD 10     # INT_10
+
+5B        # POP_BX
+CB        # RETF
+
+#[7C51]
 # Reserved for global functions
-                     00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+   00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
@@ -72,12 +88,26 @@ EA F0 FF 00 F0  # ljmp $F000:FFF0
 # Main Program Body
 #:main
 
+B0 4F           # LOADI8_AL 'O'
+9A 47 7C 00 00  # CALL 00007C47  call fputc
+B0 4B           # LOADI8_AL 'K'
+9A 47 7C 00 00  # CALL 00007C47  call fputc
+B0 0D           # LOADI8_AL '\r'
+9A 47 7C 00 00  # CALL 00007C47  call fputc
+B0 0A           # LOADI8_AL '\n'
+9A 47 7C 00 00  # CALL 00007C47  call fputc
+B0 2E           # LOADI8_AL '.'
+9A 47 7C 00 00  # CALL 00007C47  call fputc
+B0 0D           # LOADI8_AL '\r'
+9A 47 7C 00 00  # CALL 00007C47  call fputc
+B0 0A           # LOADI8_AL '\n'
+9A 47 7C 00 00  # CALL 00007C47  call fputc
+
 # we have no way to build now, so halt
 9A 40 7C 00 00  # CALL 00007C40  call halt()
 
 # otherwise we would run the build here
 
-#[7C8B]
 # after a build occurs, invoke transition
 9A 42 7C 00 00  # CALL 00007C42  call reboot()
 
@@ -85,13 +115,9 @@ EA F0 FF 00 F0  # ljmp $F000:FFF0
 
 # ------------------------------------------------------------
 # This is the rest of the MBR.
-#[7C90]
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
-#[7CC0]
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+#[7CC1]
+   00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
