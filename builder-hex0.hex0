@@ -57,18 +57,23 @@ EA C0 7C 00 00 # JMP 00007CC0  jmp _init_registers
 #:_kern_halt
 #:_syscall_halt
 #:halt
-FA  # cli
-F4  # hlt
+
+# disabled because cli apparently prevents the BIOS
+# from outputting final characters to the screen.
+90 # FA  # cli
+#:forever
+F4      # hlt
+EB FD   # jmp forever
 
 # ------------------------
-#[7C82]
+#[7C84]
 #:_kern_reboot
 #:_syscall_reboot
 #:reboot
 EA F0 FF 00 F0  # ljmp $F000:FFF0
 
 # ------------------------
-#[7C87]
+#[7C89]
 #:_syscall_putc(al=c)
 #:putc
 53        # PUSH_BX
@@ -86,13 +91,13 @@ CD 10     # INT_10
 CB        # RETF
 
 # ------------------------
-#[7C93]
+#[7C95]
 #puts(ds:si = string)
 #_puts_loop:
 AC              # lodsb
 84 C0           # test al, al
 74 07           # jz end_loop
-9A 87 7C 00 00  # CALL 00007C87  call putc
+9A 89 7C 00 00  # CALL 00007C89  call putc
 EB F4           # jmp _puts_loop
 #:end_loop
 CB              # RETF
@@ -100,8 +105,8 @@ CB              # RETF
 # ------------------------
 # Reserved for global functions
 
-#[7CA0]
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+#[7CA2]
+      00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
 # ------------------------------------------------------------
@@ -121,43 +126,153 @@ CB              # RETF
 # Main Program Body
 #:main
 
-EB 15
+# Load source code blocks
+BB 00 AA  # LOADI16_BX AA00  ; destination address for read = ES:BX = 0000:AA00
+B8 14 02  # LOADI16_AX 0201  ; rw mode = 02 (read),  num_sectors = 0x14
+B9 16 00  # LOADI16_CX 0002  ; cylinder = 0, sector_num = 0x16
+B6 00     # LOADI8_DH 00     ; head = 0
+CD 13     # INT_13
 
-BE 21 7C        # mov si, 0x7C05
-9A 93 7C 00 00  # CALL 00007C93  puts("No source found.")
+# If there is no source jump down to the no_source handler
+A0 00 AA         # mov AL, [AA00]
+84 C0            # test al, al
+74 2C            # jz no_source
 
-# we have no way to build now, so halt
-BE 05 7C        # mov si, 0x7C20 
-9A 93 7C 00 00  # CALL 00007C93  puts("Halting...")
-9A 80 7C 00 00  # CALL 00007C80  halt()
-
-# otherwise we would run the build here
+9A 1B 7D 00 00  # CALL 00007C95  run_build()
 
 BE 34 7C        # mov si, 0x7C34
-9A 93 7C 00 00  # CALL 00007C93  puts("Build finished.")
+9A 95 7C 00 00  # CALL 00007C95  puts("Build finished.")
+
+# zero the source image
+B0 00           # LOADI8_AL 00
+A2 00 AA        # mov [AA00], AL
+
+# write the new image
+BB 00 80       # LOADI16_BX 8000  ; source address for write = ES:BX = 0000:8000
+B8 16 03       # LOADI16_AX 0201  ; rw mode = 03 (write),  num_sectors = 0x16
+B9 01 00       # LOADI16_CX 0001  ; cylinder = 0, sector_num = 01
+B6 00          # LOADI8_DH 00     ; head = 0
+CD 13          # INT_13
 
 # after a build occurs, invoke transition
 BE 12 7C        # mov si, 0x7C12
-9A 93 7C 00 00  # CALL 00007C93  puts("Rebooting...")
-9A 82 7C 00 00  # CALL 00007C82  reboot()
+9A 95 7C 00 00  # CALL 00007C95  puts("Rebooting...")
+9A 84 7C 00 00  # CALL 00007C84  reboot()
 
+# This code handles when there is no source code.
+#:no_source
+BE 21 7C        # mov si, 0x7C05
+9A 95 7C 00 00  # CALL 00007C95  puts("No source found.")
+
+# we have no way to build now, so halt
+BE 05 7C        # mov si, 0x7C20
+9A 95 7C 00 00  # CALL 00007C95  puts("Halting...")
+9A 80 7C 00 00  # CALL 00007C80  halt()
+
+#
+# ----------------------------------------
+# We run the build here.
+#run_build():
+53              # PUSH_BX
+56              # PUSH_SI
+57              # PUSH_DI
+
+# this flag is set after the first digit is seen
+31 DB           # xor bx,bx
+
+# Start processing the source blocks
+BE 00 AA        # mov si, 0xAA00
+BF 00 80        # mov di, 0x8000
+
+#read_loop:
+AC              # lodsb
+
+84 C0           # test al, al
+74 4B           # jz end_read_loop
+
+3C 23           # cmp al, '#'
+74 2A           # jz skip_comment
+
+3C 3B           # cmp ';'
+74 26           # jz skip_comment
+
+3C 66           # cmp al, 'f'
+7F EF           # jg read_loop
+
+3C 61           # cmp al, 'a'
+7C 04           # jl maybe_upper
+
+# Handle a to f
+
+2C 57           # sub al, 'a'-10 == 87 = 0x57
+EB 21           # jmp maybe_store
+
+#:maybe_upper
+3C 46           # cmp al, 'F'
+7F E3           # jg read_loop
+
+3C 41           # cmp al, 'A'
+7C 04           # jl maybe_digit
+
+# Handle A to F
+
+2C 37           # sub al, 'A'-10 == 55 = x37
+EB 15           # jmp maybe_store
+
+#:maybe_digit
+3C 39           # cmp al, '9'
+7F D7           # jg read_loop
+
+3C 30           # cmp al, '0'
+7C D3           # jl read_loop
+
+# Handle 0 to 9
+
+90 90 # nop nop
+
+2C 30           # sub al, '0' == x30
+EB 07           # jmp maybe_store
+
+#:skip_comment
+AC              # lodsb
+3C 0A           # cmp al, '\n'
+75 FB           # jnz skip_comment
+
+EB C6           # jmp read_loop
+
+# only store on second digit
+#:maybe_store
+84 DB           # test bl, bl
+75 09           # jnz _second_digit
+
+# If on first digit, record and keep going
+#_first_digit:
+C0 E0 04        # shl al, 4
+88 C7           # mov bh, al
+FE C3           # inc bl
+EB B9           # jmp read_loop
+
+# If on second digit, store and clear state
+#_second_digit:
+08 C7           # or bh, al
+88 F8           # mov al, bh
+AA              # stosb
+31 DB           # xor bx, bx
+
+EB B0           # jmp read_loop
+
+#:end_read_loop
+5F              # POP_DI
+5E              # POP_SI
+5B              # POP_BX
+CB              # RETF
 # END Program Body
 
 # ------------------------------------------------------------
 # This is the rest of the MBR.
 
-      00 00 00 00 00 00 00 00 00 00 00 00 00 00
-#[7D00]
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-#[7D40]
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 #[7D80]
+00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
@@ -168,17 +283,17 @@ BE 12 7C        # mov si, 0x7C12
 # Partition entry 1
 #[7DBE]
                                           00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+00 00 00 00 00 00 00 00 00 00 00 00 00 00
 # Partition entry 2
 #[7DD0]
                                           00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+00 00 00 00 00 00 00 00 00 00 00 00 00 00
 # Partition entry 3
                                           00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+00 00 00 00 00 00 00 00 00 00 00 00 00 00
 # Partition entry 4
                                           00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+00 00 00 00 00 00 00 00 00 00 00 00 00 00
 #[7DFE]
 # This is the DOS/MBR identifier at offset 510:
-55 AA 
+55 AA
