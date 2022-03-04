@@ -18,7 +18,7 @@ make self-rebuild
 ```
 
 The self-rebuild takes source code for the build image and rebuilds the build image.
-Note that once the build is complete, the machine will not build again if restarted unless
+Note that once the build is complete, the image will not build again if restarted unless
 source code is applied again.
 
 Or build the image manually:
@@ -109,3 +109,26 @@ There is no shell in this release.
 
 ## Wish List for the Next System
 TBD
+
+## Research Sources
+
+### Boot sector bootstraps
+* https://justine.lol/sectorlisp2/  (lisp *interpreter*)
+* https://codeberg.org/StefanK/MinimalBinaryBoot   (very small forth bootsectors)
+* https://gitlab.com/giomasce/asmc  (Based on 6KB seed of G lang, Gets to C quickly)
+
+### Boot loaders
+* http://3zanders.co.uk/2017/10/13/writing-a-bootloader/ (switch to 32 bit mode)
+* https://dev.to/frosnerd/writing-my-own-boot-loader-3mld  (reading from disk, switch to 32bit)
+* https://www.ired.team/miscellaneous-reversing-forensics/windows-kernel-internals/writing-a-custom-bootloader  (memory chart)
+* https://0x00sec.org/t/realmode-assembly-writing-bootable-stuff-part-2/2992 (lots of stuff on real BIOS boot complications)
+* https://github.com/eatonphil/bootloaders/blob/main/README.md (keyboard interrupt handler)
+* https://lists.nongnu.org/archive/html/qemu-devel/2012-07/msg01310.html (qemu drive geometry)
+* https://stackoverflow.com/questions/15497842/read-a-write-a-sector-from-hard-drive-with-int-13h (read drive handle errors, print string)
+* https://www.datarecoverytools.co.uk/data-recovery-vocabulary/vocabulary-a-e/bios-translation-modes
+* https://dev.to/frosnerd/writing-my-own-boot-loader-3mld (disk read error handling)
+* https://stackoverflow.com/questions/9057670/how-to-write-on-hard-disk-with-bios-interrupt-13h (CHS calculations for int 13)
+
+### Tools
+* https://github.com/copy/v86
+* https://justine.lol/blinkenlights
