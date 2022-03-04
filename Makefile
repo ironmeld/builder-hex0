@@ -16,8 +16,8 @@
 #
 builder-hex0.img: builder-hex0.mbr
 	dd if=/dev/zero of=builder-hex0.img bs=512 count=41
-	dd if=builder-hex0.mbr of=builder-hex0.img bs=512 count=1
-	dd if=builder-hex0.hex0 of=builder-hex0.img bs=512 seek=21
+	dd if=builder-hex0.mbr of=builder-hex0.img bs=512 count=1 conv=notrunc
+	dd if=builder-hex0.hex0 of=builder-hex0.img bs=512 seek=21 conv=notrunc
 
 # $@ means the target
 # $^ means the dependencies
