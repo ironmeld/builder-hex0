@@ -23,7 +23,7 @@
 # do that first. Setting CS to zero requires a long jump so we
 # jump to a routine (just past the globals) that will initialize
 # the rest of the registers.
-EA BB 7C 00 00 # JMP 00007CBB  jmp init_registers
+EA C2 7C 00 00 # JMP 00007CC2  jmp init_registers
 
 
 # ------------------------------------------------------------
@@ -95,18 +95,38 @@ EB F4           # jmp puts_loop
 CB              # RETF
 
 # ------------------------
-# Reserved for global functions
 
 #[7CA2]
-      00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00
+#:read_disk()
+50        # PUSH_AX
+53        # PUSH_BX
+51        # PUSH_CX
+
+#:read_loop
+BB 00 AA  # LOADI16_BX AA00  ; destination address for read = ES:BX = 0000:AA00
+B8 14 02  # LOADI16_AX 0214  ; rw mode = 02 (read),  num_sectors = 0x14
+B9 16 00  # LOADI16_CX 0016  ; cylinder = 0, sector_num = 0x16
+B6 00     # LOADI8_DH 00     ; head = 0
+CD 13     # INT_13
+72 F1     # jnc read_loop
+3C 14     # cmp al, 0x14
+75 ED     # jnz read_loop
+
+59        # POP_CX
+5B        # POP_BX
+58        # POP_AX
+CB        # RETF
+
+# Reserved for global functions
+
+90 90 90 90 90 90 90
 
 # ------------------------------------------------------------
 # Main Entry Point
 # We far jump here after entry to initialize the CS register.
 # So this our real entry point. We initialize the registers
 # and drop into main().
-#[7CBB]
+#[7CC2]
 #:init_registers
 31 C0     # xor ax, ax
 8E D8     # COPY_AX_to_DS
@@ -114,17 +134,13 @@ CB              # RETF
 8E D0     # COPY_AX_to_SS
 BC 00 7C  # mov sp, 0x7C00
 
-#[7CC6]
+#[7CCD]
 # ------------------------------------------------------------
 # Main Program Body
 #:main
 
 # Load source code blocks
-BB 00 AA  # LOADI16_BX AA00  ; destination address for read = ES:BX = 0000:AA00
-B8 14 02  # LOADI16_AX 0201  ; rw mode = 02 (read),  num_sectors = 0x14
-B9 16 00  # LOADI16_CX 0002  ; cylinder = 0, sector_num = 0x16
-B6 00     # LOADI8_DH 00     ; head = 0
-CD 13     # INT_13
+9A A2 7C 00 00  # CALL 00007CA2  read_disk()
 
 # If there is no source jump down to the no_source handler
 A0 00 AA         # mov AL, [AA00]
@@ -133,8 +149,8 @@ A0 00 AA         # mov AL, [AA00]
 
 9A 1B 7D 00 00  # CALL 00007D1B  run_build()
 
-BE 34 7C        # mov si, 0x7C34
-9A 95 7C 00 00  # CALL 00007C95  puts("Build finished.")
+BE 34 7C        # mov si, 0x7C34 si="Build finished."
+9A 95 7C 00 00  # CALL 00007C95  puts(si)
 
 # zero the source image
 B0 00           # LOADI8_AL 00
