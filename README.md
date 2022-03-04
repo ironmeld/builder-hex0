@@ -12,12 +12,13 @@ To build the builder binary (builder-hex0.mbr), and an image that is ready to bu
 make
 ```
 
-To execute the current image.
+To launch the build image under QEMU:
 ```
 make self-rebuild
 ```
 
-Note: once the build is complete, the machine will not build again if restarted unless
+The self-rebuild takes source code for the build image and rebuilds the build image.
+Note that once the build is complete, the machine will not build again if restarted unless
 source code is applied again.
 
 Or build the image manually:
@@ -42,12 +43,9 @@ cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > builder-hex0.mbr
 * `x86_64` processor starting in 16-bit real mode
 * PC compatible-BIOS
 
-To run the image under `qemu-system-x86_64`:
-```
-make run
-```
 
 ## The Hex0 Builder Operating System
+
 
 ## The Hex0 Builder Standard Library
 halt() - does not return

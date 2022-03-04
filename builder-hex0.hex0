@@ -10,11 +10,12 @@
 # This file was hand assembled using this reference:
 # http://www.mathemainzel.info/files/x86asmref.html
 #
-# boot drive is in dl
-#
 
 # ------------------------------------------------------------
 # Stub Entry Point
+#
+# boot drive is in dl
+#
 #[7C00]
 #:_start
 
@@ -22,7 +23,7 @@
 # do that first. Setting CS to zero requires a long jump so we
 # jump to a routine (just past the globals) that will initialize
 # the rest of the registers.
-EA C0 7C 00 00 # JMP 00007CC0  jmp _init_registers
+EA BB 7C 00 00 # JMP 00007CBB  jmp init_registers
 
 
 # ------------------------------------------------------------
@@ -48,34 +49,25 @@ EA C0 7C 00 00 # JMP 00007CC0  jmp _init_registers
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00
 
 # ------------------------------------------------------------
 # Global functions
 
 # ------------------------
-#[7C80]
-#:_kern_halt
-#:_syscall_halt
+#[7C81]
 #:halt
-
-# disabled because cli apparently prevents the BIOS
-# from outputting final characters to the screen.
-90 # FA  # cli
-#:forever
 F4      # hlt
-EB FD   # jmp forever
+EB FD   # jmp halt
 
 # ------------------------
 #[7C84]
-#:_kern_reboot
-#:_syscall_reboot
 #:reboot
 EA F0 FF 00 F0  # ljmp $F000:FFF0
 
 # ------------------------
 #[7C89]
-#:_syscall_putc(al=c)
-#:putc
+#:putc (al=c)
 53        # PUSH_BX
 50        # PUSH_AX
 
@@ -92,13 +84,13 @@ CB        # RETF
 
 # ------------------------
 #[7C95]
-#puts(ds:si = string)
-#_puts_loop:
+#:puts (ds:si = string)
+#:puts_loop
 AC              # lodsb
 84 C0           # test al, al
 74 07           # jz end_loop
 9A 89 7C 00 00  # CALL 00007C89  call putc
-EB F4           # jmp _puts_loop
+EB F4           # jmp puts_loop
 #:end_loop
 CB              # RETF
 
@@ -107,19 +99,20 @@ CB              # RETF
 
 #[7CA2]
       00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00
 
 # ------------------------------------------------------------
 # Main Entry Point
 # We far jump here after entry to initialize the CS register.
 # So this our real entry point. We initialize the registers
 # and drop into main().
-#[7CC0]
-#:_init_registers
+#[7CBB]
+#:init_registers
 31 C0     # xor ax, ax
 8E D8     # COPY_AX_to_DS
 8E C0     # COPY_AX_to_ES
-
+8E D0     # COPY_AX_to_SS
+BC 00 7C  # mov sp, 0x7C00
 
 #[7CC6]
 # ------------------------------------------------------------
@@ -138,7 +131,7 @@ A0 00 AA         # mov AL, [AA00]
 84 C0            # test al, al
 74 2C            # jz no_source
 
-9A 1B 7D 00 00  # CALL 00007C95  run_build()
+9A 1B 7D 00 00  # CALL 00007D1B  run_build()
 
 BE 34 7C        # mov si, 0x7C34
 9A 95 7C 00 00  # CALL 00007C95  puts("Build finished.")
@@ -155,21 +148,21 @@ B6 00          # LOADI8_DH 00     ; head = 0
 CD 13          # INT_13
 
 # after a build occurs, invoke transition
-BE 12 7C        # mov si, 0x7C12
-9A 95 7C 00 00  # CALL 00007C95  puts("Rebooting...")
+BE 12 7C        # mov si, 0x7C12 si="Rebooting..."
+9A 95 7C 00 00  # CALL 00007C95  puts(si)
 9A 84 7C 00 00  # CALL 00007C84  reboot()
 
 # This code handles when there is no source code.
 #:no_source
-BE 21 7C        # mov si, 0x7C05
-9A 95 7C 00 00  # CALL 00007C95  puts("No source found.")
+BE 21 7C        # mov si, 0x7C05 si="No source found."
+9A 95 7C 00 00  # CALL 00007C95  puts(si)
 
 # we have no way to build now, so halt
-BE 05 7C        # mov si, 0x7C20
-9A 95 7C 00 00  # CALL 00007C95  puts("Halting...")
-9A 80 7C 00 00  # CALL 00007C80  halt()
+BE 05 7C        # mov si, 0x7C20 si="Halting..."
+9A 95 7C 00 00  # CALL 00007C95  puts(si)
+9A 81 7C 00 00  # CALL 00007C81  halt()
 
-#
+#[7D1B]
 # ----------------------------------------
 # We run the build here.
 #run_build():
@@ -184,7 +177,7 @@ BE 05 7C        # mov si, 0x7C20
 BE 00 AA        # mov si, 0xAA00
 BF 00 80        # mov di, 0x8000
 
-#read_loop:
+#:read_loop
 AC              # lodsb
 
 84 C0           # test al, al
@@ -243,17 +236,17 @@ EB C6           # jmp read_loop
 # only store on second digit
 #:maybe_store
 84 DB           # test bl, bl
-75 09           # jnz _second_digit
+75 09           # jnz second_digit
 
 # If on first digit, record and keep going
-#_first_digit:
+#:first_digit
 C0 E0 04        # shl al, 4
 88 C7           # mov bh, al
 FE C3           # inc bl
 EB B9           # jmp read_loop
 
 # If on second digit, store and clear state
-#_second_digit:
+#:second_digit
 08 C7           # or bh, al
 88 F8           # mov al, bh
 AA              # stosb
