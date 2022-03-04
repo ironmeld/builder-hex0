@@ -40,7 +40,7 @@ cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > builder-hex0.mbr
 
 ## Machine Requirements
 
-* `x86_64` processor starting in 16-bit real mode
+* x86-16 Processor
 * PC compatible-BIOS
 
 
@@ -48,10 +48,11 @@ cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > builder-hex0.mbr
 
 
 ## The Hex0 Builder Standard Library
-halt() - does not return
-reboot() - does not return
-putc()
-puts()
+* halt() - does not return
+* reboot() - does not return
+* putc()
+* puts()
+
 
 ## The Hex0 Language
 Grammar form: https://www.crockford.com/mckeeman.html
@@ -101,14 +102,18 @@ character
     '0020' . '00FF' - '000A' - '0000'
 ```
 
+
 ## The Hex0 Compiler
 The compiler runs automatically when the machine boots.
+
 
 ## The Hex0 Shell
 There is no shell in this release.
 
+
 ## Wish List for the Next System
 TBD
+
 
 ## Research Sources
 
