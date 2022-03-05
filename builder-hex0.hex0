@@ -23,7 +23,7 @@
 8E C0           # COPY_AX_to_ES
 8E D0           # COPY_AX_to_SS
 BC 00 7C        # mov sp, 0x7C00
-EA FF 7C 00 00  # JMP 00007CFF  jmp main
+EA FD 7C 00 00  # JMP 00007CFD  jmp main
 
 
 # ------------------------------------------------------------
@@ -130,7 +130,7 @@ CD 13     # INT_13
 CB        # RETF
 
 
-#[7CA0][61]
+#[7CA0][5F]
 # ----------------------------------------
 # Compile hex0 to binary
 #compile():
@@ -150,13 +150,13 @@ AC              # lodsb
 
 #[0c]
 84 C0           # test al, al
-74 4B           # jz end_read_loop
+74 49           # jz end_read_loop
 
 3C 23           # cmp al, '#'
-74 2A           # jz skip_comment
+74 28           # jz skip_comment
 
 3C 3B           # cmp ';'
-74 26           # jz skip_comment
+74 24           # jz skip_comment
 
 3C 66           # cmp al, 'f'
 7F EF           # jg read_loop
@@ -167,7 +167,7 @@ AC              # lodsb
 #[20]
 # Handle a to f
 2C 57           # sub al, 'a'-10 == 87 = 0x57
-EB 21           # jmp maybe_store
+EB 1F           # jmp maybe_store
 
 #:maybe_upper
 3C 46           # cmp al, 'F'
@@ -178,7 +178,7 @@ EB 21           # jmp maybe_store
 
 # Handle A to F
 2C 37           # sub al, 'A'-10 == 55 = x37
-EB 15           # jmp maybe_store
+EB 13           # jmp maybe_store
 
 #[30]
 #:maybe_digit
@@ -189,8 +189,6 @@ EB 15           # jmp maybe_store
 7C D3           # jl read_loop
 
 # Handle 0 to 9
-90 90 # nop nop
-
 2C 30           # sub al, '0' == x30
 EB 07           # jmp maybe_store
 
@@ -199,8 +197,7 @@ EB 07           # jmp maybe_store
 AC              # lodsb
 3C 0A           # cmp al, '\n'
 75 FB           # jnz skip_comment
-
-EB C6           # jmp read_loop
+EB C8           # jmp read_loop
 
 #[45]
 # only store on second digit
@@ -214,7 +211,7 @@ EB C6           # jmp read_loop
 C0 E0 04        # shl al, 4
 88 C7           # mov bh, al
 FE C3           # inc bl
-EB B9           # jmp read_loop
+EB BB           # jmp read_loop
 
 #[52]
 # If on second digit, store and clear state
@@ -224,7 +221,7 @@ EB B9           # jmp read_loop
 AA              # stosb
 31 DB           # xor bx, bx
 
-EB B0           # jmp read_loop
+EB B2           # jmp read_loop
 
 #[5B]
 #:end_read_loop
@@ -233,7 +230,7 @@ EB B0           # jmp read_loop
 5B              # POP_BX
 CB              # RETF
 
-#[7CFF][45]
+#[7CFD][45]
 # ------------------------------------------------------------
 # Main Program Body
 #:main
@@ -277,8 +274,8 @@ BE 10 7C        # mov si, 0x7C10 si="Halting..."
 # ------------------------------------------------------------
 # This is the rest of the MBR.
 
-#[7D44]
-            00 00 00 00 00 00 00 00 00 00 00 00
+#[7D42]
+      00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
