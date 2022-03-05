@@ -32,7 +32,7 @@ cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > builder-hex0.mbr
 ### General Build Instructions
 1. Convert builder-hex0.hex0 to 512 byte Master Boot Record
 2. Append 20480 zero bytes for a total length of 20992 bytes
-3. Write hex0 source at offset 10752.
+3. Place the hex0 source to be compiled at offset 10752.
     * The source must be zero terminated, so the maximum length is 10239 bytes.
 4. Launch the PC with the disk image
 5. Wait until the machine reboots and then halts
