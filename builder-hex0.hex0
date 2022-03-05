@@ -6,67 +6,62 @@
 #
 # hex0 is a "language" for binary encoding in hexadecimal
 # with support for comments.
-#
-# This file was hand assembled using this reference:
-# http://www.mathemainzel.info/files/x86asmref.html
-#
+
 
 # ------------------------------------------------------------
 # Stub Entry Point
 #
 # boot drive is in dl
 #
-#[7C00]
+#[7D00][10]
 #:_start
 
 # We cannot be sure the registers are initialized to zero so we
-# do that first. Setting CS to zero requires a long jump so we
-# jump to a routine (just past the globals) that will initialize
-# the rest of the registers.
-EA C2 7C 00 00 # JMP 00007CC2  jmp init_registers
+# do that first. We far jump to main in order to set CS.
+31 C0           # xor ax, ax
+8E D8           # COPY_AX_to_DS
+8E C0           # COPY_AX_to_ES
+8E D0           # COPY_AX_to_SS
+BC 00 7C        # mov sp, 0x7C00
+EA FF 7C 00 00  # JMP 00007CFF  jmp main
 
 
 # ------------------------------------------------------------
-# Reserved for global data
-#[7C05]
+# Global Data
+#[7C10][0D]
 #H  a  l  t  i  n  g  .  .  . \r \n \0
 48 61 6C 74 69 6E 67 2E 2E 2E 0D 0A 00
 
-#[7C12]
+#[7C1D][0F]
 #R  e  b  o  o  t  i  n  g  .  .  . \r \n \0
 52 65 62 6F 6F 74 69 6E 67 2E 2E 2E 0D 0A 00
 
-#[7C21]
+#[7C2C][13]
 #N  o     S  o  u  r  c  e    f   o  u  n  d  . \r \n \0
 4E 6F 20 73 6F 75 72 63 65 20 66 6F 75 6E 64 2E 0D 0A 00
 
-#[7C34]
-#B  u  i  l  d     F  i  n  i  s  h  e  d  . \r \n \0
+#[7C3F][12]
+#B  u  i  l  d     f  i  n  i  s  h  e  d  . \r \n \0
 42 75 69 6C 64 20 66 69 6E 69 73 68 65 64 2E 0D 0A 00
 
-#[7C46]
-                  00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00
 
 # ------------------------------------------------------------
-# Global functions
+# Standard Library functions
+# ------------------------------------------------------------
 
 # ------------------------
-#[7C81]
+#[7C51]
 #:halt
 F4      # hlt
 EB FD   # jmp halt
 
 # ------------------------
-#[7C84]
+#[7C54]
 #:reboot
 EA F0 FF 00 F0  # ljmp $F000:FFF0
 
 # ------------------------
-#[7C89]
+#[7C59][0C]
 #:putc (al=c)
 53        # PUSH_BX
 50        # PUSH_AX
@@ -83,21 +78,21 @@ CD 10     # INT_10
 CB        # RETF
 
 # ------------------------
-#[7C95]
+#[7C65][0D]
 #:puts (ds:si = string)
 #:puts_loop
-AC              # lodsb
+AC              # lodsb  al=[ds:si++]
 84 C0           # test al, al
 74 07           # jz end_loop
-9A 89 7C 00 00  # CALL 00007C89  call putc
+9A 59 7C 00 00  # CALL 00007C59  call putc
 EB F4           # jmp puts_loop
 #:end_loop
 CB              # RETF
 
 # ------------------------
 
-#[7CA2]
-#:read_disk()
+#[7C72][1A]
+#:read_source()
 50        # PUSH_AX
 53        # PUSH_BX
 51        # PUSH_CX
@@ -117,71 +112,28 @@ CD 13     # INT_13
 58        # POP_AX
 CB        # RETF
 
-# Reserved for global functions
+#[7C8C][14]
+#:write_image()
+50        # PUSH_AX
+53        # PUSH_BX
+51        # PUSH_CX
 
-90 90 90 90 90 90 90
+BB 00 80  # LOADI16_BX 8000  ; source address for write = ES:BX = 0000:8000
+B8 16 03  # LOADI16_AX 0201  ; rw mode = 03 (write),  num_sectors = 0x16
+B9 01 00  # LOADI16_CX 0001  ; cylinder = 0, sector_num = 01
+B6 00     # LOADI8_DH 00     ; head = 0
+CD 13     # INT_13
 
-# ------------------------------------------------------------
-# Main Entry Point
-# We far jump here after entry to initialize the CS register.
-# So this our real entry point. We initialize the registers
-# and drop into main().
-#[7CC2]
-#:init_registers
-31 C0     # xor ax, ax
-8E D8     # COPY_AX_to_DS
-8E C0     # COPY_AX_to_ES
-8E D0     # COPY_AX_to_SS
-BC 00 7C  # mov sp, 0x7C00
+59        # POP_CX
+5B        # POP_BX
+58        # POP_AX
+CB        # RETF
 
-#[7CCD]
-# ------------------------------------------------------------
-# Main Program Body
-#:main
 
-# Load source code blocks
-9A A2 7C 00 00  # CALL 00007CA2  read_disk()
-
-# If there is no source jump down to the no_source handler
-A0 00 AA         # mov AL, [AA00]
-84 C0            # test al, al
-74 2C            # jz no_source
-
-9A 1B 7D 00 00  # CALL 00007D1B  run_build()
-
-BE 34 7C        # mov si, 0x7C34 si="Build finished."
-9A 95 7C 00 00  # CALL 00007C95  puts(si)
-
-# zero the source image
-B0 00           # LOADI8_AL 00
-A2 00 AA        # mov [AA00], AL
-
-# write the new image
-BB 00 80       # LOADI16_BX 8000  ; source address for write = ES:BX = 0000:8000
-B8 16 03       # LOADI16_AX 0201  ; rw mode = 03 (write),  num_sectors = 0x16
-B9 01 00       # LOADI16_CX 0001  ; cylinder = 0, sector_num = 01
-B6 00          # LOADI8_DH 00     ; head = 0
-CD 13          # INT_13
-
-# after a build occurs, invoke transition
-BE 12 7C        # mov si, 0x7C12 si="Rebooting..."
-9A 95 7C 00 00  # CALL 00007C95  puts(si)
-9A 84 7C 00 00  # CALL 00007C84  reboot()
-
-# This code handles when there is no source code.
-#:no_source
-BE 21 7C        # mov si, 0x7C05 si="No source found."
-9A 95 7C 00 00  # CALL 00007C95  puts(si)
-
-# we have no way to build now, so halt
-BE 05 7C        # mov si, 0x7C20 si="Halting..."
-9A 95 7C 00 00  # CALL 00007C95  puts(si)
-9A 81 7C 00 00  # CALL 00007C81  halt()
-
-#[7D1B]
+#[7CA0][61]
 # ----------------------------------------
-# We run the build here.
-#run_build():
+# Compile hex0 to binary
+#compile():
 53              # PUSH_BX
 56              # PUSH_SI
 57              # PUSH_DI
@@ -196,6 +148,7 @@ BF 00 80        # mov di, 0x8000
 #:read_loop
 AC              # lodsb
 
+#[0c]
 84 C0           # test al, al
 74 4B           # jz end_read_loop
 
@@ -211,8 +164,8 @@ AC              # lodsb
 3C 61           # cmp al, 'a'
 7C 04           # jl maybe_upper
 
+#[20]
 # Handle a to f
-
 2C 57           # sub al, 'a'-10 == 87 = 0x57
 EB 21           # jmp maybe_store
 
@@ -224,10 +177,10 @@ EB 21           # jmp maybe_store
 7C 04           # jl maybe_digit
 
 # Handle A to F
-
 2C 37           # sub al, 'A'-10 == 55 = x37
 EB 15           # jmp maybe_store
 
+#[30]
 #:maybe_digit
 3C 39           # cmp al, '9'
 7F D7           # jg read_loop
@@ -236,12 +189,12 @@ EB 15           # jmp maybe_store
 7C D3           # jl read_loop
 
 # Handle 0 to 9
-
 90 90 # nop nop
 
 2C 30           # sub al, '0' == x30
 EB 07           # jmp maybe_store
 
+#[3e]
 #:skip_comment
 AC              # lodsb
 3C 0A           # cmp al, '\n'
@@ -249,11 +202,13 @@ AC              # lodsb
 
 EB C6           # jmp read_loop
 
+#[45]
 # only store on second digit
 #:maybe_store
 84 DB           # test bl, bl
 75 09           # jnz second_digit
 
+#[49]
 # If on first digit, record and keep going
 #:first_digit
 C0 E0 04        # shl al, 4
@@ -261,6 +216,7 @@ C0 E0 04        # shl al, 4
 FE C3           # inc bl
 EB B9           # jmp read_loop
 
+#[52]
 # If on second digit, store and clear state
 #:second_digit
 08 C7           # or bh, al
@@ -270,24 +226,68 @@ AA              # stosb
 
 EB B0           # jmp read_loop
 
+#[5B]
 #:end_read_loop
 5F              # POP_DI
 5E              # POP_SI
 5B              # POP_BX
 CB              # RETF
+
+#[7CFF][45]
+# ------------------------------------------------------------
+# Main Program Body
+#:main
+
+# Load source code blocks
+9A 72 7C 00 00  # CALL 00007C72  read_source()
+
+# If there is no source jump down to the no_source handler
+A0 00 AA         # mov AL, [AA00]
+84 C0            # test al, al
+74 2C            # jz no_source
+
+9A A0 7C 00 00  # CALL 00007CA0  compile()
+
+BE 3F 7C        # mov si, 0x7C3F si="Build finished."
+9A 65 7C 00 00  # CALL 00007C65  puts(si)
+
+# zero the source image
+B0 00           # LOADI8_AL 00
+A2 00 AA        # mov [AA00], AL
+
+9A 8C 7C 00 00  # CALL 00007C8C  write_image()
+
+# after a build occurs, invoke transition
+BE 1D 7C        # mov si, 0x7C1D si="Rebooting..."
+9A 65 7C 00 00  # CALL 00007C65  puts(si)
+9A 54 7C 00 00  # CALL 00007C54  reboot()
+
+# This code handles when there is no source code.
+#:no_source
+BE 2C 7C        # mov si, 0x7C2C si="No source found."
+9A 65 7C 00 00  # CALL 00007C65  puts(si)
+
+# we have no way to build now, so halt
+BE 10 7C        # mov si, 0x7C10 si="Halting..."
+9A 65 7C 00 00  # CALL 00007C65  puts(si)
+9A 51 7C 00 00  # CALL 00007C51  halt()
+
 # END Program Body
 
 # ------------------------------------------------------------
 # This is the rest of the MBR.
 
+#[7D44]
+            00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 #[7D80]
-00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
-#[7DB0]
 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
 
 # Partition entry 1
 #[7DBE]

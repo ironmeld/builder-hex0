@@ -31,8 +31,9 @@ cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > builder-hex0.mbr
 
 ### General Build Instructions
 1. Convert builder-hex0.hex0 to 512 byte Master Boot Record
-2. Append 10240 zero bytes
-3. Place hex0 source at the 21st sector (offset 10752)
+2. Append 20480 zero bytes for a total length of 20992 bytes
+3. Write hex0 source at offset 10752.
+    * The source must be zero terminated, so the maximum length is 10239 bytes.
 4. Launch the PC with the disk image
 5. Wait until the machine reboots and then halts
 6. The disk image itself is the result of the build
@@ -44,14 +45,18 @@ cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > builder-hex0.mbr
 * PC compatible-BIOS
 
 
-## The Hex0 Builder Operating System
+## The Hex0 Builder System Interface
+There is no system interface provided to the Standard Library.
 
+Library routines directly invoke the BIOS.
 
 ## The Hex0 Builder Standard Library
 * halt() - does not return
 * reboot() - does not return
 * putc()
 * puts()
+* read_source()
+* write_image()
 
 
 ## The Hex0 Language
@@ -112,10 +117,13 @@ There is no shell in this release.
 
 
 ## Wish List for the Next System
-TBD
+A small shell to control the build process.
 
 
 ## Research Sources
+
+### x18-16 Assembly
+* http://www.mathemainzel.info/files/x86asmref.html
 
 ### Boot sector bootstraps
 * https://justine.lol/sectorlisp2/  (lisp *interpreter*)
