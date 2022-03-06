@@ -6,33 +6,32 @@ In development and not ready for any purpose.
 
 ## Quick Start
 
-To build the builder binary (builder-hex0.mbr), and an image that is ready to build (builder-hex0.img):
+To build an image that is ready to build (builder-hex0.img):
 
 ```
 make
 ```
 
-To launch the build image under QEMU:
-```
-make self-rebuild
-```
-
-The self-rebuild takes source code for the build image and rebuilds the build image.
-Note that once the build is complete, the image will not build again if restarted unless
-source code is applied again.
-
-Or build the image manually:
+You can also build the boot sector manually:
 ```
 cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > builder-hex0.mbr
 ```
-
 * cut will strip comments starting with pound or semicolon.
 * xxd converts hex to binary.
 
+To run a self check:
+```
+make check
+```
+
+The self check takes source code for the build image and rebuilds the build image.
+Note that once the build is complete, the image will not build again if restarted unless
+source code is applied again.
+
 ### General Build Instructions
 1. Convert builder-hex0.hex0 to 512 byte Master Boot Record
-2. Append 20480 zero bytes for a total length of 20992 bytes
-3. Place the hex0 source to be compiled at offset 10752.
+2. Append 14848 zero bytes for a total length of 15360 bytes
+3. Place the hex0 source to be compiled at offset 5120
     * The source must be zero terminated, so the maximum length is 10239 bytes.
 4. Launch the PC with the disk image
 5. Wait until the machine reboots and then halts
