@@ -148,7 +148,6 @@ BF 00 80        # mov di, 0x8000
 #:read_loop
 AC              # lodsb
 
-#[0c]
 84 C0           # test al, al
 74 49           # jz end_read_loop
 
@@ -164,7 +163,6 @@ AC              # lodsb
 3C 61           # cmp al, 'a'
 7C 04           # jl maybe_upper
 
-#[20]
 # Handle a to f
 2C 57           # sub al, 'a'-10 == 87 = 0x57
 EB 1F           # jmp maybe_store
@@ -180,7 +178,6 @@ EB 1F           # jmp maybe_store
 2C 37           # sub al, 'A'-10 == 55 = x37
 EB 13           # jmp maybe_store
 
-#[30]
 #:maybe_digit
 3C 39           # cmp al, '9'
 7F D7           # jg read_loop
@@ -192,20 +189,17 @@ EB 13           # jmp maybe_store
 2C 30           # sub al, '0' == x30
 EB 07           # jmp maybe_store
 
-#[3e]
 #:skip_comment
 AC              # lodsb
 3C 0A           # cmp al, '\n'
 75 FB           # jnz skip_comment
 EB C8           # jmp read_loop
 
-#[45]
 # only store on second digit
 #:maybe_store
 84 DB           # test bl, bl
 75 09           # jnz second_digit
 
-#[49]
 # If on first digit, record and keep going
 #:first_digit
 C0 E0 04        # shl al, 4
@@ -213,7 +207,6 @@ C0 E0 04        # shl al, 4
 FE C3           # inc bl
 EB BB           # jmp read_loop
 
-#[52]
 # If on second digit, store and clear state
 #:second_digit
 08 C7           # or bh, al
@@ -223,7 +216,6 @@ AA              # stosb
 
 EB B2           # jmp read_loop
 
-#[5B]
 #:end_read_loop
 5F              # POP_DI
 5E              # POP_SI
