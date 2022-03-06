@@ -98,9 +98,9 @@ CB              # RETF
 51        # PUSH_CX
 
 #:read_loop
-BB 00 AA  # LOADI16_BX AA00  ; destination address for read = ES:BX = 0000:AA00
+BB 00 94  # LOADI16_BX 9400  ; destination address for read = ES:BX = 0000:9400
 B8 14 02  # LOADI16_AX 0214  ; rw mode = 02 (read),  num_sectors = 0x14
-B9 16 00  # LOADI16_CX 0016  ; cylinder = 0, sector_num = 0x16
+B9 0B 00  # LOADI16_CX 0016  ; cylinder = 0, sector_num = 0x0B
 B6 00     # LOADI8_DH 00     ; head = 0
 CD 13     # INT_13
 72 F1     # jnc read_loop
@@ -142,7 +142,7 @@ CB        # RETF
 31 DB           # xor bx,bx
 
 # Start processing the source blocks
-BE 00 AA        # mov si, 0xAA00
+BE 00 94        # mov si, 0x9400
 BF 00 80        # mov di, 0x8000
 
 #:read_loop
@@ -231,7 +231,7 @@ CB              # RETF
 9A 72 7C 00 00  # CALL 00007C72  read_source()
 
 # If there is no source jump down to the no_source handler
-A0 00 AA         # mov AL, [AA00]
+A0 00 94         # mov AL, [9400]
 84 C0            # test al, al
 74 2C            # jz no_source
 
@@ -242,7 +242,7 @@ BE 3F 7C        # mov si, 0x7C3F si="Build finished."
 
 # zero the source image
 B0 00           # LOADI8_AL 00
-A2 00 AA        # mov [AA00], AL
+A2 00 94        # mov [9400], AL
 
 9A 8C 7C 00 00  # CALL 00007C8C  write_image()
 

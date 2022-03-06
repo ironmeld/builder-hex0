@@ -12,12 +12,11 @@
 # for those who want to "cheat".
 #
 
-# The Builder-Hex0 x86 disk image.
-#
+# The Builder-Hex0 x86 image with no source
+# $< means "first dependency"
 builder-hex0.img: builder-hex0.mbr
-	dd if=/dev/zero of=builder-hex0.img bs=512 count=41
-	dd if=builder-hex0.mbr of=builder-hex0.img bs=512 count=1 conv=notrunc
-	dd if=builder-hex0.hex0 of=builder-hex0.img bs=512 seek=21 conv=notrunc
+	dd if=/dev/zero of=$@ bs=512 count=30
+	dd if=$< of=$@ bs=512 count=1 conv=notrunc
 
 # $@ means the target
 # $^ means the dependencies
@@ -25,19 +24,30 @@ builder-hex0.img: builder-hex0.mbr
 # uses xxd to convert hex to binary
 builder-hex0.mbr: builder-hex0.hex0
 	cut $^ -f1 -d'#' | cut -f1 -d';' | xxd -r -p > $@
+	# if not 512 bytes, show the length then remove it
 	[ `wc -c $@ | cut -f1 -d' '` = "512" ] || (ls -l $@;rm $@;exit 1)
 
-clean:
-	rm -f builder-hex0.mbr builder-hex0.img
+recursive: builder-hex0.img
 
-self-rebuild: builder-hex0.img
-	qemu-system-x86_64 -nographic -drive file=builder-hex0.img,format=raw
-	# extract the new mbr
-	dd if=builder-hex0.img of=builder-hex0.mbr.new bs=512 count=1 status=none
-	# ensure the new mbr is the same as the original
-	diff builder-hex0.mbr builder-hex0.mbr.new
-	rm builder-hex0.mbr.new
+# Build self with image and verify results
+check: builder-hex0.img builder-hex0.hex0
+	# Copy the original system portion. This must be reproduced byte-for-byte.
+	dd if=builder-hex0.img of=builder-hex0-system.bin bs=512 count=10
+	# Create a build instance
+	cp builder-hex0.img self-build.img
+	# Apply source
+	dd if=builder-hex0.hex0 of=self-build.img bs=512 seek=10 conv=notrunc
+	# Launch build
+	qemu-system-x86_64 -nographic -drive file=self-build.img,format=raw
+	# Extract the new system
+	dd if=self-build.img of=self-build-system.bin bs=512 count=10 status=none
+	# Ensure the new system is the same as the original
+	diff self-build-system.bin builder-hex0-system.bin
+	rm builder-hex0-system.bin self-build.img self-build-system.bin 
+
+clean:
+	rm -f builder-hex0.mbr builder-hex0.img builder-hex0-self-build.img 
 
 # Make does not check whether PHONY targets already exist as files or dirs.
 # It just invokes their recipes when they are targeted, no questions asked.
-.PHONY: clean run self-rebuild
+.PHONY: check clean
