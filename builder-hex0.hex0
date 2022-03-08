@@ -13,34 +13,44 @@
 #
 # boot drive is in dl
 #
-#[7D00][10]
+#[7C00][13]
 #:_start
 
 # We cannot be sure the registers are initialized to zero so we
-# do that first. We far jump to main in order to set CS.
+# do that first. We far jump to mbr_main in order to set CS.
 31 C0           # xor ax, ax
 8E D8           # COPY_AX_to_DS
 8E C0           # COPY_AX_to_ES
+FA              # cli               ;  cli/sti necessary on 8088
 8E D0           # COPY_AX_to_SS
 BC 00 7C        # mov sp, 0x7C00
-EA FD 7C 00 00  # JMP 00007CFD  jmp main
+FB              # sti
+FC              # CLD ; clear direction flag
+
+EA 25 7D 00 00  # JMP 00007D25  jmp mbr_main
 
 
 # ------------------------------------------------------------
 # Global Data
-#[7C10][0D]
+#[7C13]
+80     # boot_drive
+10     # boot drive num_heads (default = 16)
+3F     # boot drive num_sectors / track (default = 63)
+
+
+#[7C16][0D]
 #H  a  l  t  i  n  g  .  .  . \r \n \0
 48 61 6C 74 69 6E 67 2E 2E 2E 0D 0A 00
 
-#[7C1D][0F]
+#[7C23][0F]
 #R  e  b  o  o  t  i  n  g  .  .  . \r \n \0
 52 65 62 6F 6F 74 69 6E 67 2E 2E 2E 0D 0A 00
 
-#[7C2C][13]
+#[7C32][13]
 #N  o     S  o  u  r  c  e    f   o  u  n  d  . \r \n \0
 4E 6F 20 73 6F 75 72 63 65 20 66 6F 75 6E 64 2E 0D 0A 00
 
-#[7C3F][12]
+#[7C45][12]
 #B  u  i  l  d     f  i  n  i  s  h  e  d  . \r \n \0
 42 75 69 6C 64 20 66 69 6E 69 73 68 65 64 2E 0D 0A 00
 
@@ -50,18 +60,18 @@ EA FD 7C 00 00  # JMP 00007CFD  jmp main
 # ------------------------------------------------------------
 
 # ------------------------
-#[7C51]
+#[7C57]
 #:halt
 F4      # hlt
 EB FD   # jmp halt
 
 # ------------------------
-#[7C54]
+#[7C5A]
 #:reboot
 EA F0 FF 00 F0  # ljmp $F000:FFF0
 
 # ------------------------
-#[7C59][0C]
+#[7C5F][0C]
 #:putc (al=c)
 53        # PUSH_BX
 50        # PUSH_AX
@@ -78,59 +88,332 @@ CD 10     # INT_10
 CB        # RETF
 
 # ------------------------
-#[7C65][0D]
+#[7C6B][0D]
 #:puts (ds:si = string)
 #:puts_loop
 AC              # lodsb  al=[ds:si++]
 84 C0           # test al, al
 74 07           # jz end_loop
-9A 59 7C 00 00  # CALL 00007C59  call putc
+9A 5F 7C 00 00  # CALL 00007C5F  call putc
 EB F4           # jmp puts_loop
 #:end_loop
 CB              # RETF
 
+
+#[7C78][16]
 # ------------------------
+#:get_partition_start(al=partition_num 1..4)
+#returns:
+# cx = cylinder/sector
+# dh = head
+50              # PUSH_AX
+56              # PUSH_SI
 
-#[7C72][1A]
+BB 10 00        # mov bx, 0x0010     ; bx = partition_length
+30 E4           # xor ah, ah
+F7 E3           # mul bx             ; entry_offset = partition_num * bx
+89 C6           # mov si, ax         ; si = entry_offset
+BB BE 7D        # mov bx, 7DBE       ; bx = &partition_table
+8A 30           # mov dh, [bx+si]    ; dh = head = partition_table[al][0]
+8B 48 01        # mov cx, [bx+si+1]  ; cx = cyl/sector = partition_table[al][1]
+
+5E              # POP_SI
+58              # POP_AX
+CB              # retf
+
+
+#[7C8E][18]
+# ------------------------
+#:get_drive_geometry(dl)
+06              # PUSH_ES
+57              # PUSH_DI
+
+# https://en.wikipedia.org/wiki/INT_13H#INT_13h_AH=08h:_Read_Drive_Parameters
+31 FF           # xor di, di
+83 C7           # mov es, di
+B4 08           # mov ah, 8       ; get drive parameters
+CD 13           # INT_13
+
+88 36 14 7C     # mov 0x7C14, dh
+80 E1 3F        # and cl, 0x3f
+88 0E 15 7C     # mov 0x7C15, cl
+
+5F              # POP_DI
+07              # POP_ES
+CB              # retf
+
+
+#[7CA6][37]
+# ------------------------
+#:next_sector(cx=cylinder/sector, dh = head)
+50              # PUSH_AX
+
+88 C8           # mov al, cl          ; get sector number
+24 3F           # and al, 0x3f
+3C 3F           # cmp al, 0x3f        ; if sector_num == 63
+74 04           # jz next_head        ;      goto next_head
+FE C1           # inc cl              ; else sector_num++;
+EB 28           # jmp cleanup
+
+#next_head:
+3A 36 14 7C     # cmp dh, [0x7C14]    ; if head_num == num_heads
+74 09           # jz next_cylinder    ;      goto next_cyclinder
+FE C6           # inc dh              ; else head_num++
+80 E1 C0        # and cl, 0xc0        ;      sector_num = 1
+FE C1           # inc cl              ;
+EB 18           # jmp cleanup
+
+#next_cylinder:
+80 FD FF        # cmp ch, 0xff        ; if cylinder_low == 255
+75 0B           # jnz next_cyl_high
+
+#next_cyl_low:
+30 F6           # xor dh, dh          ; head_num = 0
+80 E1 C0        # and cl, 0xc0        ; sector_num = 0
+81 C1 01 01     # add cx, 0x0101      ; cylinder_low++, sector_num++
+EB 08           # jmp cleanup
+
+#next_cyl_high:
+30 F6           # xor dh, dh          ; head_num = 0
+81 C1 C0 00     # and cx, 0x00C0      ; cylinder_low = 0, sector_num = 0
+80 C1 41        # add cl, 0x41        ; cylinder_high++, sector_num++
+
+#cleanup:
+58              # POP_AX
+CB              # retf
+
+
+#[7CDD][37]
+#:read_sectors(di = *dest_addr, cx=cylinder/sector, dh = head, ax=num_sectors)
+#
+# returns: di - next byte to write to
+#          cx,dh - next disk sector to read from
+#
+50              # PUSH_AX
+53              # PUSH_BX
+56              # PUSH_SI
+
+89 C6            # mov si, ax      ; si=num_sectors
+89 FB            # mov bx, di      ; int 13 writes to bx
+
+#:read_one_loop
+
+
+# debug
+#50               # PUSH_AX
+#B0 09           # mov al, 09
+#88 C8            # mov al, cl
+#88 E8           # mov al, ch
+#88 F8           # mov al, bh
+#89 F0           # mov ax, si
+#89 F0           # mov ax, si
+#88 F0           # mov al, dh
+#9A 60 7D 00 00  # call put_hex
+#58              # POP_AX
+90
+90 90
+90 90 90 90 90
+90
+
+
+B4 02           # mov ah, 2       ; rw mode = 02 (read)
+B0 01           # mov al, 1       ; num_sectors
+CD 13           # INT_13
+72 EF           # jnc read_one_loop
+3C 01           # cmp al, 1
+75 EB           # jnz read_one_loop
+
+# advance and maybe continue
+9A A6 7C 00 00  # call next_sector
+#33
+
+# debug
+#50              # PUSH_AX
+#89 F0           # mov ax, si
+#9A 60 7D 00 00  # call put_hex
+#58              # POP_AX
+90
+90 90
+90 90 90 90 90
+90
+
+# we read one sector, advance
+81 C3 00 02     # add bx, 0x200
+
+4E              # dec si          ; num_sectors--
+75 D6           # jnz read_one_loop
+
+89 DF           # mov di, bx
+
+5E              # POP_SI
+5B              # POP_BX
+58              # POP_AX
+CB              # RETF
+
+#[7D14]
+            00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00
+
+#[7D25][19]
+#:mbr_main (dl=boot_drive)
+# Load the kernel and jump to it
+88 16 13 7C     # mov 0x7C13, dl   ; save boot drive
+BF 00 7E        # mov di, 0x7E00   ; place kernel after MBR in memory
+B8 05 00        # mov ax, 0x0005   ; num_sectors = 5
+B9 02 00        # LOADI16_CX 0002  ; cylinder = 0, sector_num = 0x02
+B6 00           # LOADI8_DH 00     ; head = 0
+9A DD 7C 00 00  # call read_sectors
+EA 00 7E 00 00  # JMP 00007E00  jmp kern_main
+
+
+# ------------------------------------------------------------
+# This is the rest of the MBR.
+#[7D3E]
+                                          00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+#[7D60][38]
+#:put_hex(al=byte)
+50              # PUSH_AX
+
+24 F0           # and al, 0xF0
+C0 E8 04        # shr al, 4
+3C 09           # cmp al, 9
+7F 04           # jg alpha
+#10
+
+#numeral:
+04 30           # add al, 0x30
+EB 02           # jmp print
+
+#alpha:
+04 37           # add al, 0x37
+#16
+
+#print1:
+9A 5F 7C 00 00  # CALL 00007C5F  call putc
+
+58              # POP_AX        ; restore original al
+50              # PUSH_AX       ;
+
+24 0F           # and al, 0x0F
+3C 09           # cmp al, 9
+7F 04           # jg alpha
+#29
+
+#numeral:
+04 30           # add al, 0x30
+EB 02           # jmp print
+
+#alpha:
+04 37           # add al, 0x37
+#35
+
+#print1:
+9A 5F 7C 00 00  # CALL 00007C5F  call putc
+
+B0 0A           # mov al, 0x0a
+9A 5F 7C 00 00  # CALL 00007C5F  call putc
+B0 0D           # mov al, 0x0D
+9A 5F 7C 00 00  # CALL 00007C5F  call putc
+#54
+
+58              # POP_AX
+CB              # retf
+
+#[7D98]
+                        00 00 00 00 00 00 00 00
+#[7DA0]
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+#[7DB0]
+00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+# Partition entry 1
+#[7DBE]
+# status inactive
+00
+# first head,sector[0..5]+cylinder[8..9],cylinder[0..7]
+00 01 00
+# type non-fs data
+DA
+# last head,sector[0..5]+cylinder[8..9],cylinder[0..7]
+00 00 00
+# LBA start
+00 00 00 00
+# Num sectors
+00 00 00 00
+
+# Partition entry 2
+#[7DCE]
+                                          00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00
+# Partition entry 3
+                                          00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00
+# Partition entry 4
+                                          00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00
+#[7DFE]
+# This is the DOS/MBR identifier at offset 510:
+55 AA
+
+
+#kern_main
+#[7E00][24]
+EA AC 7E 00 00  # JMP 00007EAC  jmp main
+
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+#[7E14][17]
 #:read_source()
-50        # PUSH_AX
-53        # PUSH_BX
-51        # PUSH_CX
+50              # PUSH_AX
+53              # PUSH_BX
+51              # PUSH_CX
 
-#:read_loop
-BB 00 94  # LOADI16_BX 9400  ; destination address for read = ES:BX = 0000:9400
-B8 14 02  # LOADI16_AX 0214  ; rw mode = 02 (read),  num_sectors = 0x14
-B9 0B 00  # LOADI16_CX 0016  ; cylinder = 0, sector_num = 0x0B
-B6 00     # LOADI8_DH 00     ; head = 0
-CD 13     # INT_13
-72 F1     # jnc read_loop
-3C 14     # cmp al, 0x14
-75 ED     # jnz read_loop
+BF 00 94        # mov di, 0x9400
+B8 33 00        # mov ax, 0x0034   ; num_sectors = 52
+B9 07 00        # LOADI16_CX 0007  ; cylinder = 0, sector_num = 0x07
+B6 00           # LOADI8_DH 00     ; head = 0
+9A DD 7C 00 00  # call read_sectors
 
-59        # POP_CX
-5B        # POP_BX
-58        # POP_AX
-CB        # RETF
+# debug
+#B0 71           # mov al, 71
+#9A 60 7D 00 00  # call put_hex
+#A0 00 94        # mov al, [0x9400]
+#9A 60 7D 00 00  # call put_hex
+90 90
+90 90 90 90 90
+90 90 90
+90 90 90 90 90
 
-#[7C8C][14]
+59              # POP_CX
+5B              # POP_BX
+58              # POP_AX
+CB              # RETF
+
+00 #00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+
+#[7E3B][14]
 #:write_image()
-50        # PUSH_AX
-53        # PUSH_BX
-51        # PUSH_CX
+50              # PUSH_AX
+53              # PUSH_BX
+51              # PUSH_CX
 
-BB 00 80  # LOADI16_BX 8000  ; source address for write = ES:BX = 0000:8000
-B8 16 03  # LOADI16_AX 0201  ; rw mode = 03 (write),  num_sectors = 0x16
-B9 01 00  # LOADI16_CX 0001  ; cylinder = 0, sector_num = 01
-B6 00     # LOADI8_DH 00     ; head = 0
-CD 13     # INT_13
+BB 00 88        # LOADI16_BX 8800  ; source address for write = ES:BX = 0000:8000
+B8 07 03        # LOADI16_AX 0307  ; rw mode = 03 (write),  num_sectors = 0x07
+B9 01 00        # LOADI16_CX 0001  ; cylinder = 0, sector_num = 01
+B6 00           # LOADI8_DH 00     ; head = 0
+CD 13           # INT_13
 
-59        # POP_CX
-5B        # POP_BX
-58        # POP_AX
-CB        # RETF
+59              # POP_CX
+5B              # POP_BX
+58              # POP_AX
+CB              # RETF
 
 
-#[7CA0][5F]
+#[7E4F][5D]
 # ----------------------------------------
 # Compile hex0 to binary
 #compile():
@@ -143,11 +426,10 @@ CB        # RETF
 
 # Start processing the source blocks
 BE 00 94        # mov si, 0x9400
-BF 00 80        # mov di, 0x8000
+BF 00 88        # mov di, 0x8800
 
 #:read_loop
 AC              # lodsb
-
 84 C0           # test al, al
 74 49           # jz end_read_loop
 
@@ -222,76 +504,85 @@ EB B2           # jmp read_loop
 5B              # POP_BX
 CB              # RETF
 
-#[7CFD][45]
+#[7EAC][51]
 # ------------------------------------------------------------
 # Main Program Body
-#:main
+#:main (dl=boot_drive)
+
+# debug
+#B0 81           # mov al, 81
+#9A 60 7D 00 00  # call put_hex
+90 90
+90 90 90 90 90
+
+9A 8E 7C 00 00  # CALL 00000000 get_drive_geometry()
+
+# debug
+#B0 82           # mov al, 82
+#9A 60 7D 00 00  # call put_hex
+90 90
+90 90 90 90 90
 
 # Load source code blocks
-9A 72 7C 00 00  # CALL 00007C72  read_source()
+9A 14 7E 00 00  # CALL 00007E14  read_source()
+
+# debug
+# B0 83           # mov al, 83
+# 9A 60 7D 00 00  # call put_hex
+90 90
+90 90 90 90 90
 
 # If there is no source jump down to the no_source handler
-A0 00 94         # mov AL, [9400]
-84 C0            # test al, al
-74 2C            # jz no_source
+A0 00 94        # mov AL, [9400]
+84 C0           # test al, al
+74 24           # jz no_source
 
-9A A0 7C 00 00  # CALL 00007CA0  compile()
+9A 4F 7E 00 00  # CALL 00007E4F  compile()
 
-BE 3F 7C        # mov si, 0x7C3F si="Build finished."
-9A 65 7C 00 00  # CALL 00007C65  puts(si)
+BE 45 7C        # mov si, 0x7C45 si="Build finished."
+9A 6B 7C 00 00  # CALL 00007C6B  puts(si)
 
 # zero the source image
 B0 00           # LOADI8_AL 00
 A2 00 94        # mov [9400], AL
 
-9A 8C 7C 00 00  # CALL 00007C8C  write_image()
+9A 3B 7E 00 00  # CALL 00007E3b  write_image()
 
 # after a build occurs, invoke transition
-BE 1D 7C        # mov si, 0x7C1D si="Rebooting..."
-9A 65 7C 00 00  # CALL 00007C65  puts(si)
-9A 54 7C 00 00  # CALL 00007C54  reboot()
+BE 23 7C        # mov si, 0x7C23 si="Rebooting..."
+9A 6B 7C 00 00  # CALL 00007C6B  puts(si)
+9A 5A 7C 00 00  # CALL 00007C5A  reboot()
 
 # This code handles when there is no source code.
 #:no_source
-BE 2C 7C        # mov si, 0x7C2C si="No source found."
-9A 65 7C 00 00  # CALL 00007C65  puts(si)
+BE 32 7C        # mov si, 0x7C32 si="No source found."
+9A 6B 7C 00 00  # CALL 00007C6B  puts(si)
 
 # we have no way to build now, so halt
-BE 10 7C        # mov si, 0x7C10 si="Halting..."
-9A 65 7C 00 00  # CALL 00007C65  puts(si)
-9A 51 7C 00 00  # CALL 00007C51  halt()
+BE 16 7C        # mov si, 0x7C16 si="Halting..."
+9A 6B 7C 00 00  # CALL 00007C6B  puts(si)
+9A 57 7C 00 00  # CALL 00007C57  halt()
 
 # END Program Body
 
-# ------------------------------------------------------------
-# This is the rest of the MBR.
 
-#[7D42]
-      00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00
+#[7F10]
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-#[7D80]
+#[7F40]
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
-
-# Partition entry 1
-#[7DBE]
-                                          00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00
-# Partition entry 2
-#[7DD0]
-                                          00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00
-# Partition entry 3
-                                          00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00
-# Partition entry 4
-                                          00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00
-#[7DFE]
-# This is the DOS/MBR identifier at offset 510:
-55 AA
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+#[7F80]
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+#[7FC0]
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00

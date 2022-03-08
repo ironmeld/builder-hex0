@@ -29,10 +29,10 @@ Note that once the build is complete, the image will not build again if restarte
 source code is applied again.
 
 ### General Build Instructions
-1. Convert builder-hex0.hex0 to 512 byte Master Boot Record
-2. Append 14848 zero bytes for a total length of 15360 bytes
+1. Convert builder-hex0.hex0 to binary
+2. Append zero bytes for a total length of 29696 bytes
 3. Place the hex0 source to be compiled at offset 5120
-    * The source must be zero terminated, so the maximum length is 10239 bytes.
+    * The source must be zero terminated, so the maximum length is 24569 bytes.
 4. Launch the PC with the disk image
 5. Wait until the machine reboots and then halts
 6. The disk image itself is the result of the build
