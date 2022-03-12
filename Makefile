@@ -24,8 +24,8 @@ builder-hex0.img: builder-hex0.bin
 # uses xxd to convert hex to binary
 builder-hex0.bin: builder-hex0.hex0
 	cut $^ -f1 -d'#' | cut -f1 -d';' | xxd -r -p > $@
-	# if not 512 bytes, show the length then remove it
-	[ `wc -c $@ | cut -f1 -d' '` = "1024" ] || (ls -l $@;rm $@;exit 1)
+	# if not right size, show the length then remove it
+	[ `wc -c $@ | cut -f1 -d' '` = "1536" ] || (ls -l $@;rm $@;exit 1)
 
 recursive: builder-hex0.img
 

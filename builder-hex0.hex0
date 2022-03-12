@@ -7,6 +7,37 @@
 # hex0 is a "language" for binary encoding in hexadecimal
 # with support for comments.
 
+# --- stage 1
+# _start
+# [global data]
+# halt
+# reboot
+#
+# putc_16
+# put_hex_16
+# puts_16
+#
+# get_partition_start_16
+# get_drive_geometry
+# next_sector
+# read_sectors
+#
+# mbr_main
+
+# --- stage 2
+# kern_main
+# [GDT data]
+# start_32bit_main
+# enter_16bit_real
+# resume_32bit_mode
+#
+# get_partition_start
+# putc
+# put_hex
+# puts
+#
+# main
+
 
 # ------------------------------------------------------------
 # Stub Entry Point
@@ -23,56 +54,62 @@
 8E C0           # COPY_AX_to_ES
 FA              # cli               ;  cli/sti necessary on 8088
 8E D0           # COPY_AX_to_SS
-BC 00 7C        # mov sp, 0x7C00
+BC 00 7B        # mov sp, 0x7B00
 FB              # sti
 FC              # CLD ; clear direction flag
 
-EA 25 7D 00 00  # JMP 00007D25  jmp mbr_main
+EA 48 7D 00 00  # jmp mbr_main
 
 
 # ------------------------------------------------------------
 # Global Data
 #[7C13]
 80     # boot_drive
-10     # boot drive num_heads (default = 16)
-3F     # boot drive num_sectors / track (default = 63)
+0F     # boot drive max_head  0..15 
+3F     # boot drive num_sectors / track (1..63)
 
 
-#[7C16][0D]
-#H  a  l  t  i  n  g  .  .  . \r \n \0
-48 61 6C 74 69 6E 67 2E 2E 2E 0D 0A 00
+#[7C16][0B]
+#H  a  l  t  i  n  g  .  .  . \0
+48 61 6C 74 69 6E 67 2E 2E 2E 00
 
-#[7C23][0F]
-#R  e  b  o  o  t  i  n  g  .  .  . \r \n \0
-52 65 62 6F 6F 74 69 6E 67 2E 2E 2E 0D 0A 00
+#[7C21][0D]
+#R  e  b  o  o  t  i  n  g  .  .  . \0
+52 65 62 6F 6F 74 69 6E 67 2E 2E 2E 00
 
-#[7C32][13]
-#N  o     S  o  u  r  c  e    f   o  u  n  d  . \r \n \0
-4E 6F 20 73 6F 75 72 63 65 20 66 6F 75 6E 64 2E 0D 0A 00
+#[7C2E][11]
+#N  o     s  o  u  r  c  e    f   o  u  n  d  . \0
+4E 6F 20 73 6F 75 72 63 65 20 66 6F 75 6E 64 2E 00
 
-#[7C45][12]
-#B  u  i  l  d     f  i  n  i  s  h  e  d  . \r \n \0
-42 75 69 6C 64 20 66 69 6E 69 73 68 65 64 2E 0D 0A 00
+#[7C3F][10]
+#B  u  i  l  d     f  i  n  i  s  h  e  d  . \0
+42 75 69 6C 64 20 66 69 6E 69 73 68 65 64 2E 00
 
+#[7C4F][8]
+# available
+00 00 00 00 00 00 00 00
 
-# ------------------------------------------------------------
-# Standard Library functions
-# ------------------------------------------------------------
 
 # ------------------------
 #[7C57]
 #:halt
+#
 F4      # hlt
 EB FD   # jmp halt
 
 # ------------------------
 #[7C5A]
 #:reboot
+#
 EA F0 FF 00 F0  # ljmp $F000:FFF0
 
 # ------------------------
-#[7C5F][0C]
-#:putc (al=c)
+#[7C5F][16]
+#:putc_16(al=c)
+#
+# Note: with QEMU+Seabios this does not flush the last character or
+# CRLF of a line until the first character is output on the next line
+# and that character cannot be another CRLF.
 53        # PUSH_BX
 50        # PUSH_AX
 
@@ -81,200 +118,24 @@ EA F0 FF 00 F0  # ljmp $F000:FFF0
 BB 00 07  # LOADI16_BX 0007
 # Specify the `write character` BIOS routine
 B4 0E     # LOADI8_AH  0E
+
+3C 0A     # cmp al, 0A
+75 06     # jne regular
+
+# convert LF to CR LF for BIOS output
+B0 0D     # mov al, 0D
+CD 10     # INT_10
+B0 0A     # mov al, 0A
+
+#:regular:
 CD 10     # INT_10
 
 58        # POP_AX
 5B        # POP_BX
 CB        # RETF
 
-# ------------------------
-#[7C6B][0D]
-#:puts (ds:si = string)
-#:puts_loop
-AC              # lodsb  al=[ds:si++]
-84 C0           # test al, al
-74 07           # jz end_loop
-9A 5F 7C 00 00  # CALL 00007C5F  call putc
-EB F4           # jmp puts_loop
-#:end_loop
-CB              # RETF
-
-
-#[7C78][16]
-# ------------------------
-#:get_partition_start(al=partition_num 1..4)
-#returns:
-# cx = cylinder/sector
-# dh = head
-50              # PUSH_AX
-56              # PUSH_SI
-
-BB 10 00        # mov bx, 0x0010     ; bx = partition_length
-30 E4           # xor ah, ah
-F7 E3           # mul bx             ; entry_offset = partition_num * bx
-89 C6           # mov si, ax         ; si = entry_offset
-BB BE 7D        # mov bx, 7DBE       ; bx = &partition_table
-8A 30           # mov dh, [bx+si]    ; dh = head = partition_table[al][0]
-8B 48 01        # mov cx, [bx+si+1]  ; cx = cyl/sector = partition_table[al][1]
-
-5E              # POP_SI
-58              # POP_AX
-CB              # retf
-
-
-#[7C8E][18]
-# ------------------------
-#:get_drive_geometry(dl)
-06              # PUSH_ES
-57              # PUSH_DI
-
-# https://en.wikipedia.org/wiki/INT_13H#INT_13h_AH=08h:_Read_Drive_Parameters
-31 FF           # xor di, di
-83 C7           # mov es, di
-B4 08           # mov ah, 8       ; get drive parameters
-CD 13           # INT_13
-
-88 36 14 7C     # mov 0x7C14, dh
-80 E1 3F        # and cl, 0x3f
-88 0E 15 7C     # mov 0x7C15, cl
-
-5F              # POP_DI
-07              # POP_ES
-CB              # retf
-
-
-#[7CA6][37]
-# ------------------------
-#:next_sector(cx=cylinder/sector, dh = head)
-50              # PUSH_AX
-
-88 C8           # mov al, cl          ; get sector number
-24 3F           # and al, 0x3f
-3C 3F           # cmp al, 0x3f        ; if sector_num == 63
-74 04           # jz next_head        ;      goto next_head
-FE C1           # inc cl              ; else sector_num++;
-EB 28           # jmp cleanup
-
-#next_head:
-3A 36 14 7C     # cmp dh, [0x7C14]    ; if head_num == num_heads
-74 09           # jz next_cylinder    ;      goto next_cyclinder
-FE C6           # inc dh              ; else head_num++
-80 E1 C0        # and cl, 0xc0        ;      sector_num = 1
-FE C1           # inc cl              ;
-EB 18           # jmp cleanup
-
-#next_cylinder:
-80 FD FF        # cmp ch, 0xff        ; if cylinder_low == 255
-75 0B           # jnz next_cyl_high
-
-#next_cyl_low:
-30 F6           # xor dh, dh          ; head_num = 0
-80 E1 C0        # and cl, 0xc0        ; sector_num = 0
-81 C1 01 01     # add cx, 0x0101      ; cylinder_low++, sector_num++
-EB 08           # jmp cleanup
-
-#next_cyl_high:
-30 F6           # xor dh, dh          ; head_num = 0
-81 C1 C0 00     # and cx, 0x00C0      ; cylinder_low = 0, sector_num = 0
-80 C1 41        # add cl, 0x41        ; cylinder_high++, sector_num++
-
-#cleanup:
-58              # POP_AX
-CB              # retf
-
-
-#[7CDD][37]
-#:read_sectors(di = *dest_addr, cx=cylinder/sector, dh = head, ax=num_sectors)
-#
-# returns: di - next byte to write to
-#          cx,dh - next disk sector to read from
-#
-50              # PUSH_AX
-53              # PUSH_BX
-56              # PUSH_SI
-
-89 C6            # mov si, ax      ; si=num_sectors
-89 FB            # mov bx, di      ; int 13 writes to bx
-
-#:read_one_loop
-
-
-# debug
-#50               # PUSH_AX
-#B0 09           # mov al, 09
-#88 C8            # mov al, cl
-#88 E8           # mov al, ch
-#88 F8           # mov al, bh
-#89 F0           # mov ax, si
-#89 F0           # mov ax, si
-#88 F0           # mov al, dh
-#9A 60 7D 00 00  # call put_hex
-#58              # POP_AX
-90
-90 90
-90 90 90 90 90
-90
-
-
-B4 02           # mov ah, 2       ; rw mode = 02 (read)
-B0 01           # mov al, 1       ; num_sectors
-CD 13           # INT_13
-72 EF           # jnc read_one_loop
-3C 01           # cmp al, 1
-75 EB           # jnz read_one_loop
-
-# advance and maybe continue
-9A A6 7C 00 00  # call next_sector
-#33
-
-# debug
-#50              # PUSH_AX
-#89 F0           # mov ax, si
-#9A 60 7D 00 00  # call put_hex
-#58              # POP_AX
-90
-90 90
-90 90 90 90 90
-90
-
-# we read one sector, advance
-81 C3 00 02     # add bx, 0x200
-
-4E              # dec si          ; num_sectors--
-75 D6           # jnz read_one_loop
-
-89 DF           # mov di, bx
-
-5E              # POP_SI
-5B              # POP_BX
-58              # POP_AX
-CB              # RETF
-
-#[7D14]
-            00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00
-
-#[7D25][19]
-#:mbr_main (dl=boot_drive)
-# Load the kernel and jump to it
-88 16 13 7C     # mov 0x7C13, dl   ; save boot drive
-BF 00 7E        # mov di, 0x7E00   ; place kernel after MBR in memory
-B8 05 00        # mov ax, 0x0005   ; num_sectors = 5
-B9 02 00        # LOADI16_CX 0002  ; cylinder = 0, sector_num = 0x02
-B6 00           # LOADI8_DH 00     ; head = 0
-9A DD 7C 00 00  # call read_sectors
-EA 00 7E 00 00  # JMP 00007E00  jmp kern_main
-
-
-# ------------------------------------------------------------
-# This is the rest of the MBR.
-#[7D3E]
-                                          00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
-#[7D60][38]
-#:put_hex(al=byte)
+#[7C75][31]
+#:put_hex_16(al=byte)
 50              # PUSH_AX
 
 24 F0           # and al, 0xF0
@@ -292,7 +153,7 @@ EB 02           # jmp print
 #16
 
 #print1:
-9A 5F 7C 00 00  # CALL 00007C5F  call putc
+9A 5F 7C 00 00  # CALL 00007C5F  call putc_16
 
 58              # POP_AX        ; restore original al
 50              # PUSH_AX       ;
@@ -311,20 +172,185 @@ EB 02           # jmp print
 #35
 
 #print1:
-9A 5F 7C 00 00  # CALL 00007C5F  call putc
+9A 5F 7C 00 00  # CALL 00007C5F  call putc_16
 
 B0 0A           # mov al, 0x0a
-9A 5F 7C 00 00  # CALL 00007C5F  call putc
-B0 0D           # mov al, 0x0D
-9A 5F 7C 00 00  # CALL 00007C5F  call putc
-#54
+9A 5F 7C 00 00  # CALL 00007C5F  call putc_16
 
 58              # POP_AX
 CB              # retf
 
-#[7D98]
-                        00 00 00 00 00 00 00 00
-#[7DA0]
+
+# ------------------------
+#[7CA6][14]
+#:puts_16 (ds:si = string)
+#:puts_16_loop
+#
+AC              # lodsb  al=[ds:si++]
+84 C0           # test al, al
+74 07           # jz end_loop
+9A 5F 7C 00 00  # CALL 00007C5F  call putc_16
+EB F4           # jmp puts_loop
+
+#:end_loop
+B0 0A           # mov al, 0A
+9A 5F 7C 00 00  # CALL 00007C5F  call putc_16
+CB              # RETF
+
+
+#[7CBA][16]
+# ------------------------
+#:get_partition_start_16(al=partition_num 1..4)
+#returns:
+# cx = cylinder/sector
+# dh = head
+#
+50              # PUSH_AX
+56              # PUSH_SI
+
+BB 10 00        # mov bx, 0x0010     ; bx = partition_length
+30 E4           # xor ah, ah
+F7 E3           # mul bx             ; entry_offset = partition_num * bx
+89 C6           # mov si, ax         ; si = entry_offset
+BB AF 7D        # mov bx, 7DAF       ; bx = &partition_table[-1]
+8A 30           # mov dh, [bx+si]    ; dh = head = partition_table[al][0]
+8B 48 01        # mov cx, [bx+si+1]  ; cx = cyl/sector = partition_table[al][1]
+
+5E              # POP_SI
+58              # POP_AX
+CB              # retf
+
+
+#[7CD0][18]
+# ------------------------
+#:get_drive_geometry(dl)
+#
+06              # PUSH_ES
+57              # PUSH_DI
+
+# https://en.wikipedia.org/wiki/INT_13H#INT_13h_AH=08h:_Read_Drive_Parameters
+31 FF           # xor di, di
+8E C7           # mov es, di
+B4 08           # mov ah, 8       ; get drive parameters
+CD 13           # INT_13
+
+88 36 14 7C     # mov 0x7C14, dh
+80 E1 3F        # and cl, 0x3f
+88 0E 15 7C     # mov 0x7C15, cl
+
+5F              # POP_DI
+07              # POP_ES
+CB              # retf
+
+
+#[7CE8][37]
+# ------------------------
+#:next_sector(cx=cylinder/sector, dh = head)
+#
+50              # PUSH_AX
+
+88 C8           # mov al, cl          ; get sector number
+24 3F           # and al, 0x3f
+3C 3F           # cmp al, 0x3f        ; if sector_num == 63
+74 04           # jz next_head        ;      goto next_head
+FE C1           # inc cl              ; else sector_num++;
+EB 28           # jmp cleanup
+
+#next_head:
+3A 36 14 7C     # cmp dh, [0x7C14]    ; if head_num == num_heads
+74 09           # jz next_cylinder    ;      goto next_cyclinder
+FE C6           # inc dh              ; else head_num++
+80 E1 C0        # and cl, 0xc0        ;      sector_num = 1
+FE C1           # inc cl              ;
+EB 19           # jmp cleanup
+
+#next_cylinder:
+80 FD FF        # cmp ch, 0xff        ; if cylinder_low == 255
+75 0B           # jnz next_cyl_high
+
+#next_cyl_low:
+30 F6           # xor dh, dh          ; head_num = 0
+80 E1 C0        # and cl, 0xc0        ; sector_num = 0
+81 C1 01 01     # add cx, 0x0101      ; cylinder_low++, sector_num++
+EB 09           # jmp cleanup
+
+#next_cyl_high:
+30 F6           # xor dh, dh          ; head_num = 0
+81 C1 C0 00     # and cx, 0x00C0      ; cylinder_low = 0, sector_num = 0
+80 C1 41        # add cl, 0x41        ; cylinder_high++, sector_num++
+
+#cleanup:
+58              # POP_AX
+CB              # retf
+
+
+#[7D1F][25]
+#:read_sectors(di = *dest_addr, cx=cylinder/sector, dh = head, ax=num_sectors)
+#
+# returns: di - next byte to write to
+#          cx,dh - next disk sector to read from
+#
+50              # PUSH_AX
+53              # PUSH_BX
+56              # PUSH_SI
+
+89 C6            # mov si, ax      ; si=num_sectors
+89 FB            # mov bx, di      ; int 13 writes to bx
+
+#:read_one_loop
+# debug
+
+8A 16 13 7C     # mov dl, [0x7C13]
+B4 02           # mov ah, 2       ; rw mode = 02 (read)
+B0 01           # mov al, 1       ; num_sectors
+CD 13           # INT_13
+72 F4           # jnc read_one_loop
+3C 01           # cmp al, 1
+75 F0           # jnz read_one_loop
+
+#19
+# advance and maybe continue
+9A E8 7C 00 00  # call next_sector
+
+# debug
+
+# we read one sector, advance
+81 C3 00 02     # add bx, 0x200
+#28
+4E              # dec si          ; num_sectors--
+75 E4           # jnz read_one_loop
+
+89 DF           # mov di, bx
+
+5E              # POP_SI
+5B              # POP_BX
+58              # POP_AX
+CB              # RETF
+#37
+
+
+#[7D48][19]
+#:mbr_main (dl=boot_drive)
+# Load the kernel and jump to it
+88 16 13 7C     # mov 0x7C13, dl   ; save boot drive
+9A D0 7C 00 00  # CALL get_drive_geometry()
+BF 00 7E        # mov di, 0x7E00   ; place kernel after MBR in memory
+B8 05 00        # mov ax, 0x0005   ; num_sectors = 5
+B9 02 00        # LOADI16_CX 0002  ; cylinder = 0, sector_num = 0x02
+B6 00           # LOADI8_DH 00     ; head = 0
+9A 1F 7D 00 00  # call read_sectors
+EA 00 7E 00 00  # JMP 00007E00  jmp kern_main
+
+
+# ------------------------------------------------------------
+# This is the rest of the MBR.
+#
+#[7D  ]
+                  00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+#[7D80]
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 #[7DB0]
 00 00 00 00 00 00 00 00 00 00 00 00 00 00
@@ -334,7 +360,7 @@ CB              # retf
 # status inactive
 00
 # first head,sector[0..5]+cylinder[8..9],cylinder[0..7]
-00 01 00
+0a 01 0c
 # type non-fs data
 DA
 # last head,sector[0..5]+cylinder[8..9],cylinder[0..7]
@@ -358,230 +384,358 @@ DA
 # This is the DOS/MBR identifier at offset 510:
 55 AA
 
+#------------------------------------------------------------
+# The kernel entry point
+#------------------------------------------------------------
+#:kern_main
+#[7E00][14]
+#mov al, 82
+#call put_hex
 
-#kern_main
-#[7E00][24]
-EA AC 7E 00 00  # JMP 00007EAC  jmp main
+EA 36 7E 00 00  # JMP jmp start_32bit_main
 
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
-#[7E14][17]
-#:read_source()
-50              # PUSH_AX
-53              # PUSH_BX
-51              # PUSH_CX
-
-BF 00 94        # mov di, 0x9400
-B8 33 00        # mov ax, 0x0034   ; num_sectors = 52
-B9 07 00        # LOADI16_CX 0007  ; cylinder = 0, sector_num = 0x07
-B6 00           # LOADI8_DH 00     ; head = 0
-9A DD 7C 00 00  # call read_sectors
-
-# debug
-#B0 71           # mov al, 71
-#9A 60 7D 00 00  # call put_hex
-#A0 00 94        # mov al, [0x9400]
-#9A 60 7D 00 00  # call put_hex
-90 90
-90 90 90 90 90
+# alignment
 90 90 90
-90 90 90 90 90
 
-59              # POP_CX
-5B              # POP_BX
-58              # POP_AX
+#---------------------------------------------
+# The Global Descriptor Table for 32 bit mode.
+#---------------------------------------------
+#[7E08]
+#:GDT_start:
+00 00 00 00 00 00 00 00
+
+#7E10 [+08]
+#:GDT_code32:
+FF FF # limit 0:15
+00 00 # base  0:15
+00    # base 16:23
+9A    # access byte 10011010b
+      #   present=1 privilege=00 type=1
+      #   code=1 conforming=0 readable=1 accessed=0
+CF    # 11001111b
+      #   granularity=1 32-bit-default=1 64-bit seg=0 AVL=0
+00    #
+
+#7E18 [+10]
+#:GDT_data32:
+FF FF # limit 0:15
+00 00 # base  0:15
+00    # base 16:23
+92    # access byte 10010010b 
+      #   present=1 privilege=00 type=1
+      #   code=0 conforming=0 readable=1 accessed=0
+CF    # flags, limit 16:19 11001111b  
+      #   granularity=1 32-bit-default=1 64-bit seg=0 AVL=0
+00    # base 24:31
+
+#7E20 [+18]
+#:GDT_code16:
+FF FF # limit 0:15
+00 00 # base  0:15
+00    # base 16:23
+9A    # access byte 10011010b
+      #   present=1 privilege=00 type=1
+      #   code=1 conforming=0 readable=1 accessed=0
+8F    # 10001111b
+      #   granularity=1 32-bit-default=0 64-bit seg=0 AVL=0
+00    #
+
+#7E28 [+20]
+#:GDT_data16:
+FF FF # limit 0:15
+00 00 # base  0:15
+00    # base 16:23
+92    # access byte 10010010b 
+      #   present=1 privilege=00 type=1
+      #   code=0 conforming=0 readable=1 accessed=0
+8F    # flags, limit 16:19 10001111b  
+      #   granularity=1 32-bit-default=0 64-bit seg=0 AVL=0
+00    # base 24:31
+
+#7E30
+#:GDT_locator
+27 00        #  length
+08 7E 00 00  #  GDT_start
+
+# ------------------------------------------------------------
+# Kernel Functions
+# ------------------------------------------------------------
+#
+#
+
+#[7E36][1A]
+#:start_32bit_main()
+B8 01 24        # mov ax,2401h     # enable A20 line
+CD 15           # int 15h
+
+FA              # cli
+0F 01 16 30 7E  # lgdt GDT_locator
+0F 20 C0        # mov eax, cr0
+66 83 C8 01     # or eax, 0x01
+0F 22 C0        # mov cr0, eax
+EA 50 7E 08 00  # JMP jmp setup_32bit
+#[7E50][1C]
+#:setup_32bit
+66 B8 10 00     # mov ax, 0x0010      ; data descriptor
+8E D8           # mov ds, ax
+8E D0           # mov ss, ax
+8E C0           # mov es, ax
+8E E0           # mov fs, ax
+8E E8           # mov gs, ax
+BD 00 00 09 00  # mov ebp, 0x90000
+89 EC           # mov esp, ebp
+
+9A C0 7F 00 00 08 00  # call app_main
+
+
+#----------------------------------------
+# 32 -> 16 -> 32 bit switching functions
+#----------------------------------------
+# When switching between real mode and
+# protected, registers are stored here:
+#
+# 7B14  edx
+# 7B10
+# 7B0C
+# 7B08  eax
+# 7B04  esp
+#
+# 7B00  <- top of real mode stack
+
+
+#----------------------------------------
+#[7E6C][61]
+#:enter_16bit_real
+FA                 # cli
+A3 08 7B 00 00     # mov [0x7B08], eax  ; preserve so we can use these locally
+89 15 14 7B 00 00  # mov [0x7B14], edx  ;
+5A                 # pop edx            ; capture return address
+89 25 04 7B 00 00  # mov [0x7B04], esp  ; capture stack
+
+#x13
+# The following far jump sets CS to a 16-bit protected mode selector
+# and the segment registers are also set to 16-bit protected mode selectors.
+# This is done prior to entering real mode.
+EA 86 7E 00 00 18 00  # jmp 0x18:setup_16bit
+#x1A
+#[7E86]
+#:setup_16bit
+B8 20 00        # mov eax, 0x0020
+8E D0           # mov ss, eax
+8E D8           # mov ds, eax
+8E C0           # mov es, eax
+8E E8           # mov gs, eax
+8E E0           # mov fs, eax
+BC 00 7B        # mov sp, 0x7B00
+0F 20 C0        # mov eax, cr0
+66 83 E0 FE     # and eax, 0xfffffffe  ; clear protected mode
+0F 22 C0        # mov cr0, eax
+#x34
+# The following far jump sets CS to a 16-bit real mode segment
+# and the segment registers are also set to real mode segments.
+EA A5 7E 00 00  # jmp 0000:XXXX  real_mode
+#39
+#[7EA5]
+#:real_mode
+B8 00 00        # mov ax, 0x0
+8E D8           # mov ds, ax
+8E E0           # mov fs, ax
+8E E8           # mov gs, ax
+8E D0           # mov ss, ax
+8E C0           # mov es, ax
+BC 00 7B        # mov sp, 0x7B00
+FA              # cli
+0F 01 1E C7 7E  # lidt IDT
+FB              # sti
+#0x50
+#[7EBC]
+# Using retf to set CS comes from here:
+# https://stackoverflow.com/questions/26448480/bios-interrupts-in-protected-mode
+# This page recommends a far jump followed by sti:
+# https://www.sudleyplace.com/pmtorm.html
+6A 00           # push 0x0000 (2 bytes!)  CS to return to
+52              # push dx  IP to return to
+a1 08 7b        # mov ax, [0x7B08]  ; restore from above
+8b 16 14 7b     # mov dx, [0x7B14]
+CB              # retf
+#0x61
+
+# IDT
+#[7EC7]
+FF FF
+00 00 00 00
+
+#----------------------------------------
+#[7ECD][40]
+#:resume_32bit_mode()
+# modifies: ebp and all segment registers
+FA              # cli
+A3 08 7B        # mov [0x7B08], ax  ; preserve, they might be return values from 16 bit
+89 16 24 7b     # mov [0x7B14], dx
+5A              # pop dx      ; carry the return IP in dx
+58              # pop ax      ; CS
+0F 01 16 30 7E  # lgdt GDT_locator
+0F 20 C0        # mov eax, cr0
+66 83 C8 01     # or eax, 0x01
+0F 22 C0        # mov cr0, eax
+EA EB 7E 08 00  # JMP restore_32bit
+#1E
+#[7EEB]
+#:restore_32bit
+B8 10 00 00 00     # mov eax, 0x0010      ; data descriptor
+8E D8              # mov ds, eax
+8E D0              # mov ss, eax
+8E C0              # mov es, eax
+8E E0              # mov fs, eax
+8E E8              # mov gs, eax
+8B 25 04 7B 00 00  # mov esp, [0x7B04]   ; restore, (saved in enter_16bit_mode)
+
+52                 # push edx
+# These restore the 16 bit portion of these registers, which may be a
+# return value from a 16 bit function, and they also restore any previous high
+# bits that were stored by enter_16bit_mode so these registers need not be
+# saved when going to 16 bit mode and back if you want them left alone.
+A1 08 7B 00 00     # mov eax, [0x7B08]   ; restore, (saved at top of this function)
+8B 15 14 7B 00 00  # mov edx, [0x7B14]
+C3                 # ret
+
+
+#[7F0D][10]
+#:putc:
+#
+E8 5A FF FF FF  # CALL enter_16bit_real, next=[7F12]
+9A 5F 7C 00 00  # CALL putc(al)
+9A CD 7E 00 00  # CALL resume_32bit_mode
 CB              # RETF
 
-00 #00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
-
-#[7E3B][14]
-#:write_image()
-50              # PUSH_AX
-53              # PUSH_BX
-51              # PUSH_CX
-
-BB 00 88        # LOADI16_BX 8800  ; source address for write = ES:BX = 0000:8000
-B8 07 03        # LOADI16_AX 0307  ; rw mode = 03 (write),  num_sectors = 0x07
-B9 01 00        # LOADI16_CX 0001  ; cylinder = 0, sector_num = 01
-B6 00           # LOADI8_DH 00     ; head = 0
-CD 13           # INT_13
-
-59              # POP_CX
-5B              # POP_BX
-58              # POP_AX
+#:put_hex
+#[7F1D][10]
+E8 4A FF FF FF  # CALL enter_16bit_real, next=[7F22]
+9A 75 7C 00 00  # CALL put_hex_16(al)
+9A CD 7E 00 00  # CALL resume_32bit_mode
 CB              # RETF
 
 
-#[7E4F][5D]
-# ----------------------------------------
-# Compile hex0 to binary
-#compile():
-53              # PUSH_BX
-56              # PUSH_SI
-57              # PUSH_DI
-
-# this flag is set after the first digit is seen
-31 DB           # xor bx,bx
-
-# Start processing the source blocks
-BE 00 94        # mov si, 0x9400
-BF 00 88        # mov di, 0x8800
-
-#:read_loop
-AC              # lodsb
-84 C0           # test al, al
-74 49           # jz end_read_loop
-
-3C 23           # cmp al, '#'
-74 28           # jz skip_comment
-
-3C 3B           # cmp ';'
-74 24           # jz skip_comment
-
-3C 66           # cmp al, 'f'
-7F EF           # jg read_loop
-
-3C 61           # cmp al, 'a'
-7C 04           # jl maybe_upper
-
-# Handle a to f
-2C 57           # sub al, 'a'-10 == 87 = 0x57
-EB 1F           # jmp maybe_store
-
-#:maybe_upper
-3C 46           # cmp al, 'F'
-7F E3           # jg read_loop
-
-3C 41           # cmp al, 'A'
-7C 04           # jl maybe_digit
-
-# Handle A to F
-2C 37           # sub al, 'A'-10 == 55 = x37
-EB 13           # jmp maybe_store
-
-#:maybe_digit
-3C 39           # cmp al, '9'
-7F D7           # jg read_loop
-
-3C 30           # cmp al, '0'
-7C D3           # jl read_loop
-
-# Handle 0 to 9
-2C 30           # sub al, '0' == x30
-EB 07           # jmp maybe_store
-
-#:skip_comment
-AC              # lodsb
-3C 0A           # cmp al, '\n'
-75 FB           # jnz skip_comment
-EB C8           # jmp read_loop
-
-# only store on second digit
-#:maybe_store
-84 DB           # test bl, bl
-75 09           # jnz second_digit
-
-# If on first digit, record and keep going
-#:first_digit
-C0 E0 04        # shl al, 4
-88 C7           # mov bh, al
-FE C3           # inc bl
-EB BB           # jmp read_loop
-
-# If on second digit, store and clear state
-#:second_digit
-08 C7           # or bh, al
-88 F8           # mov al, bh
-AA              # stosb
-31 DB           # xor bx, bx
-
-EB B2           # jmp read_loop
-
-#:end_read_loop
-5F              # POP_DI
-5E              # POP_SI
-5B              # POP_BX
+# ------------------------
+#[7F2D][1A]
+#:puts (ds:si = string)
+#:puts_loop
+8A 06           # mov al, [esi]
+3C 00           # cmp al, 0
+74 0A           # jz end_loop
+9A 0D 7F 00 00 08 00  # call putc
+46              # inc esi
+EB F0           # jmp puts_loop
+#:end_loop
+B0 0A           # mov al, 0A
+9A 0D 7F 00 00 08 00  # call putc
 CB              # RETF
 
-#[7EAC][51]
+
+#[7F47][18]
+# ------------------------
+#:get_partition_start(eax=partition_num 1..4)
+#returns:
+# cx = cylinder/sector
+# dh = head
+#
+50              # PUSH_EAX
+56              # PUSH_ESI
+
+6b c0 10        # mul eax, eax, 0x10
+89 C6           # mov esi, eax         ; esi = entry_offset
+bb ae 7d 00 00  # mov ebx, 7DAE        ; ebx = &partition_table[-1]
+8a 74 33 01     # mov dh, [ebx+esi+1]  ; dh = head = partition_table[al][0]
+66 8b 4c 33 02  # mov cx, [ebx+esi+2]  ; cx = cyl/sector = partition_table[al][1]
+
+5E              # POP_ESI
+58              # POP_EAX
+CB              # retf
+
+#[7F5F][1E]
+                                             90
+90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90
+90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90
+
+90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90
+90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90
+90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90
+90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90
+
+#[7FC0]
 # ------------------------------------------------------------
 # Main Program Body
-#:main (dl=boot_drive)
+# ------------------------------------------------------------
+#:app_main (dl=boot_drive)
 
 # debug
-#B0 81           # mov al, 81
-#9A 60 7D 00 00  # call put_hex
-90 90
-90 90 90 90 90
+B0 82           # mov al, 82
+9A 1D 7F 00 00 08 00  # call put_hex
 
-9A 8E 7C 00 00  # CALL 00000000 get_drive_geometry()
+b8 01 00 00 00        # mov ax, 1
+9A 47 7F 00 00 08 00  # call get_partition_start(4)
+
+88 C8                 # mov al, cl
+9A 1D 7F 00 00 08 00  # call put_hex
+
+88 E8                 # mov al, ch
+9A 1D 7F 00 00 08 00  # call put_hex
+
+88 F0                 # mov al, dh
+9A 1D 7F 00 00 08 00  # call put_hex
 
 # debug
-#B0 82           # mov al, 82
-#9A 60 7D 00 00  # call put_hex
-90 90
-90 90 90 90 90
+B8 16 7C 00 00        # mov eax, "Halting..."
+89 C6                 # mov esi, eax
+9A 2D 7F 00 00 08 00  # call puts
 
-# Load source code blocks
-9A 14 7E 00 00  # CALL 00007E14  read_source()
+# one space to flush last line
+B0 20                 # mov al, 20
+9A 0D 7F 00 00 08 00  # call putc
 
-# debug
-# B0 83           # mov al, 83
-# 9A 60 7D 00 00  # call put_hex
-90 90
-90 90 90 90 90
-
-# If there is no source jump down to the no_source handler
-A0 00 94        # mov AL, [9400]
-84 C0           # test al, al
-74 24           # jz no_source
-
-9A 4F 7E 00 00  # CALL 00007E4F  compile()
-
-BE 45 7C        # mov si, 0x7C45 si="Build finished."
-9A 6B 7C 00 00  # CALL 00007C6B  puts(si)
-
-# zero the source image
-B0 00           # LOADI8_AL 00
-A2 00 94        # mov [9400], AL
-
-9A 3B 7E 00 00  # CALL 00007E3b  write_image()
-
-# after a build occurs, invoke transition
-BE 23 7C        # mov si, 0x7C23 si="Rebooting..."
-9A 6B 7C 00 00  # CALL 00007C6B  puts(si)
-9A 5A 7C 00 00  # CALL 00007C5A  reboot()
-
-# This code handles when there is no source code.
-#:no_source
-BE 32 7C        # mov si, 0x7C32 si="No source found."
-9A 6B 7C 00 00  # CALL 00007C6B  puts(si)
-
-# we have no way to build now, so halt
-BE 16 7C        # mov si, 0x7C16 si="Halting..."
-9A 6B 7C 00 00  # CALL 00007C6B  puts(si)
-9A 57 7C 00 00  # CALL 00007C57  halt()
+FA                    # cli
+F4                    # halt
 
 # END Program Body
 
 
-00 00 00 00 00
-#[7F10]
+#[8009]
+                           00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-#[7F40]
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-#[7F80]
+#[8040]
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-#[7FC0]
+#[8080]
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+#[80C0]
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+#[8100]
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+#[8140]
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+#[8180]
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+#[81C0]
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00

@@ -39,9 +39,10 @@ source code is applied again.
 
 
 ## Machine Requirements
-
 * x86-16 Processor
 * PC compatible-BIOS
+   * Must support int 15h,0x2401 (A20 activation)
+   * Must support int 13h,AH=08h (Read\_Drive\_Parameter)
 
 
 ## The Hex0 Builder System Interface
