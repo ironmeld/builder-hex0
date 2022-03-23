@@ -15,7 +15,7 @@
 # The Builder-Hex0 x86 image with no source
 # $< means "first dependency"
 builder-hex0.img: builder-hex0.bin
-	dd if=/dev/zero of=$@ bs=512 count=58
+	dd if=/dev/zero of=$@ bs=512 count=135
 	dd if=$< of=$@ bs=512 conv=notrunc
 
 # $@ means the target
@@ -25,7 +25,7 @@ builder-hex0.img: builder-hex0.bin
 builder-hex0.bin: builder-hex0.hex0
 	cut $^ -f1 -d'#' | cut -f1 -d';' | xxd -r -p > $@
 	# if not right size, show the length then remove it
-	[ `wc -c $@ | cut -f1 -d' '` = "1536" ] || (ls -l $@;rm $@;exit 1)
+	[ `wc -c $@ | cut -f1 -d' '` = "2048" ] || (ls -l $@;rm $@;exit 1)
 
 recursive: builder-hex0.img
 

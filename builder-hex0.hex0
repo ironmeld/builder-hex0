@@ -1,4 +1,3 @@
-# Builder-Hex0
 #
 # Builder-Hex0 is a small bootable machine image which has
 # the ability to compile hex0 code. It is also written in hex0
@@ -13,14 +12,14 @@
 # halt
 # reboot
 #
-# putc_16
-# put_hex_16
-# puts_16
+# console_putc_16
+# console_put_hex_16
+# console_puts_16
 #
 # get_partition_start_16
 # get_drive_geometry
 # next_sector
-# read_sectors
+# read_sectors_16
 #
 # mbr_main
 
@@ -28,15 +27,39 @@
 # kern_main
 # [GDT data]
 # start_32bit_main
+# setup_interrupt_handlers
+# stub_interrupt_handler
 # enter_16bit_real
 # resume_32bit_mode
 #
+# console_putc
+# console_put_hex
+# console_puts
 # get_partition_start
-# putc
-# put_hex
-# puts
+# read_sectors
 #
-# main
+# syscall_interrupt_handler
+# handle_syscall_open
+# handle_syscall_read
+#
+# --- "User Mode"
+# app_main
+
+
+#------------------------------------------------------------
+# Memory:
+# 400000 -        processes
+# 300000 - 3FFFFF files
+# 100000 - 1FFFF0 32 bit stack
+#  9FC00 -  FFFFF BIOS
+#  20000 -  9FBFF device buffers
+#  10800 -  1FFFF opened file descriptors (8 bytes each)
+#  10000 -  10800 interrupt table
+#   A000 -   A1FF sector read buffer - 16bit
+#   7C00 -   8200 code
+#   7B00 -   7BFF Saved 32 bit registers while in 16 bit mode
+# < 7B00          real mode stack
+#------------------------------------------------------------
 
 
 # ------------------------------------------------------------
@@ -105,7 +128,7 @@ EA F0 FF 00 F0  # ljmp $F000:FFF0
 
 # ------------------------
 #[7C5F][16]
-#:putc_16(al=c)
+#:console_putc_16(al=c)
 #
 # Note: with QEMU+Seabios this does not flush the last character or
 # CRLF of a line until the first character is output on the next line
@@ -135,7 +158,7 @@ CD 10     # INT_10
 CB        # RETF
 
 #[7C75][31]
-#:put_hex_16(al=byte)
+#:console_put_hex_16(al=byte)
 50              # PUSH_AX
 
 24 F0           # and al, 0xF0
@@ -146,14 +169,14 @@ C0 E8 04        # shr al, 4
 
 #numeral:
 04 30           # add al, 0x30
-EB 02           # jmp print
+EB 02           # jmp print1
 
 #alpha:
 04 37           # add al, 0x37
 #16
 
 #print1:
-9A 5F 7C 00 00  # CALL 00007C5F  call putc_16
+9A 5F 7C 00 00  # CALL 00007C5F  call console_putc_16
 
 58              # POP_AX        ; restore original al
 50              # PUSH_AX       ;
@@ -165,17 +188,17 @@ EB 02           # jmp print
 
 #numeral:
 04 30           # add al, 0x30
-EB 02           # jmp print
+EB 02           # jmp print2
 
 #alpha:
 04 37           # add al, 0x37
 #35
 
-#print1:
-9A 5F 7C 00 00  # CALL 00007C5F  call putc_16
+#print2:
+9A 5F 7C 00 00  # CALL 00007C5F  call console_putc_16
 
 B0 0A           # mov al, 0x0a
-9A 5F 7C 00 00  # CALL 00007C5F  call putc_16
+9A 5F 7C 00 00  # CALL 00007C5F  call console_putc_16
 
 58              # POP_AX
 CB              # retf
@@ -183,18 +206,18 @@ CB              # retf
 
 # ------------------------
 #[7CA6][14]
-#:puts_16 (ds:si = string)
+#:console_puts_16 (ds:si = string)
 #:puts_16_loop
 #
 AC              # lodsb  al=[ds:si++]
 84 C0           # test al, al
 74 07           # jz end_loop
-9A 5F 7C 00 00  # CALL 00007C5F  call putc_16
-EB F4           # jmp puts_loop
+9A 5F 7C 00 00  # CALL 00007C5F  call console_putc_16
+EB F4           # jmp puts_16_loop
 
 #:end_loop
 B0 0A           # mov al, 0A
-9A 5F 7C 00 00  # CALL 00007C5F  call putc_16
+9A 5F 7C 00 00  # CALL 00007C5F  call console_putc_16
 CB              # RETF
 
 
@@ -284,8 +307,8 @@ EB 09           # jmp cleanup
 CB              # retf
 
 
-#[7D1F][25]
-#:read_sectors(di = *dest_addr, cx=cylinder/sector, dh = head, ax=num_sectors)
+#[7D1F][29]
+#:read_sectors_16(di = *dest_addr, cx=cylinder/sector, dh = head, ax=num_sectors)
 #
 # returns: di - next byte to write to
 #          cx,dh - next disk sector to read from
@@ -298,9 +321,7 @@ CB              # retf
 89 FB            # mov bx, di      ; int 13 writes to bx
 
 #:read_one_loop
-# debug
-
-8A 16 13 7C     # mov dl, [0x7C13]
+8A 16 13 7C     # mov dl, [0x7C13] ; boot disk
 B4 02           # mov ah, 2       ; rw mode = 02 (read)
 B0 01           # mov al, 1       ; num_sectors
 CD 13           # INT_13
@@ -311,8 +332,6 @@ CD 13           # INT_13
 #19
 # advance and maybe continue
 9A E8 7C 00 00  # call next_sector
-
-# debug
 
 # we read one sector, advance
 81 C3 00 02     # add bx, 0x200
@@ -338,7 +357,7 @@ BF 00 7E        # mov di, 0x7E00   ; place kernel after MBR in memory
 B8 05 00        # mov ax, 0x0005   ; num_sectors = 5
 B9 02 00        # LOADI16_CX 0002  ; cylinder = 0, sector_num = 0x02
 B6 00           # LOADI8_DH 00     ; head = 0
-9A 1F 7D 00 00  # call read_sectors
+9A 1F 7D 00 00  # call read_sectors_16
 EA 00 7E 00 00  # JMP 00007E00  jmp kern_main
 
 
@@ -360,7 +379,7 @@ EA 00 7E 00 00  # JMP 00007E00  jmp kern_main
 # status inactive
 00
 # first head,sector[0..5]+cylinder[8..9],cylinder[0..7]
-0a 01 0c
+00 01 00
 # type non-fs data
 DA
 # last head,sector[0..5]+cylinder[8..9],cylinder[0..7]
@@ -372,14 +391,47 @@ DA
 
 # Partition entry 2
 #[7DCE]
-                                          00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00
+# status inactive
+00
+# first head,sector[0..5]+cylinder[8..9],cylinder[0..7]
+00 02 00
+# type "non-fs data"
+DA
+# last head,sector[0..5]+cylinder[8..9],cylinder[0..7]
+00 00 00
+# LBA start
+00 00 00 00
+# Num sectors
+00 00 00 00
+
 # Partition entry 3
-                                          00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00
+# status inactive
+00
+# first head,sector[0..5]+cylinder[8..9],cylinder[0..7]
+00 03 00
+# type "non-fs data"
+DA
+# last head,sector[0..5]+cylinder[8..9],cylinder[0..7]
+00 00 00
+# LBA start
+00 00 00 00
+# Num sectors
+00 00 00 00
+
 # Partition entry 4
-                                          00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00
+# status inactive
+00
+# first head,sector[0..5]+cylinder[8..9],cylinder[0..7]
+00 07 00
+# type "non-fs data"
+DA
+# last head,sector[0..5]+cylinder[8..9],cylinder[0..7]
+00 00 00
+# LBA start
+00 00 00 00
+# Num sectors
+00 00 00 00
+
 #[7DFE]
 # This is the DOS/MBR identifier at offset 510:
 55 AA
@@ -389,8 +441,6 @@ DA
 #------------------------------------------------------------
 #:kern_main
 #[7E00][14]
-#mov al, 82
-#call put_hex
 
 EA 36 7E 00 00  # JMP jmp start_32bit_main
 
@@ -457,40 +507,81 @@ FF FF # limit 0:15
 27 00        #  length
 08 7E 00 00  #  GDT_start
 
+
 # ------------------------------------------------------------
 # Kernel Functions
 # ------------------------------------------------------------
-#
-#
 
-#[7E36][1A]
+#----------------------------------------
+#[7E36][3D]
 #:start_32bit_main()
-B8 01 24        # mov ax,2401h     # enable A20 line
-CD 15           # int 15h
+B8 01 24              # mov ax,2401h     # enable A20 line
+CD 15                 # int 15h
 
-FA              # cli
-0F 01 16 30 7E  # lgdt GDT_locator
-0F 20 C0        # mov eax, cr0
-66 83 C8 01     # or eax, 0x01
-0F 22 C0        # mov cr0, eax
-EA 50 7E 08 00  # JMP jmp setup_32bit
-#[7E50][1C]
+FA                    # cli
+0F 01 16 30 7E        # lgdt GDT_locator
+0F 20 C0              # mov eax, cr0
+66 83 C8 01           # or eax, 0x01
+0F 22 C0              # mov cr0, eax
+EA 50 7E 08 00        # JMP jmp setup_32bit
+#[7E50][@1A][23]
 #:setup_32bit
-66 B8 10 00     # mov ax, 0x0010      ; data descriptor
-8E D8           # mov ds, ax
-8E D0           # mov ss, ax
-8E C0           # mov es, ax
-8E E0           # mov fs, ax
-8E E8           # mov gs, ax
-BD 00 00 09 00  # mov ebp, 0x90000
-89 EC           # mov esp, ebp
+66 B8 10 00           # mov ax, 0x0010      ; data descriptor
+8E D8                 # mov ds, ax
+8E D0                 # mov ss, ax
+8E C0                 # mov es, ax
+8E E0                 # mov fs, ax
+8E E8                 # mov gs, ax
+BD 0F FF 1F 00        # mov ebp, 0x1FFFF0
+89 EC                 # mov esp, ebp
 
-9A C0 7F 00 00 08 00  # call app_main
+9A 73 7E 00 00 08 00  # call setup_interrupt_handlers
+9A 43 81 00 00 08 00  # call app_main
 
 
 #----------------------------------------
+#[7E73][40]
+#:setup_interrupt_handlers
+53                    # push ebx
+
+# handle the timer interrupt 08
+BB 40 00 01 00        # mov ebx, &interrupt_table[08]
+66 C7 03 B9 7E        # mov word [ebx + 0], low_address stub_interrupt_handler
+66 C7 43 06 00 00     # mov word [ebx + 6], high_address
+66 C7 43 02 08 00     # mov word [ebx + 2], code_segment = 0x0800
+C6 43 05 8E           # mov byte [ebx + 5], flags = 8E
+
+# handle int 80
+BB 00 04 01 00        # mov ebx, &interrupt_table[80]
+66 C7 03 C4 7F        # mov word [ebx + 0], low_address syscall_interrupt_handler
+66 C7 43 06 00 00     # mov word [ebx + 6], high_address
+66 C7 43 02 08 00     # mov word [ebx + 2], code_segment = 0x0800
+C6 43 05 8E           # mov byte [ebx + 5], flags = 8E
+
+# load the interrupt table
+FA                    # cli
+0F 01 1D B3 7E 00 00  # lidt [0x00007EB3] IDT_locator_32
+FB                    # sti
+5B                    # pop ebx
+CB                    # retf
+
+
+#----------------------------------------
+#[7EB3][06]
+#:IDT_locator_32
+FF 07        #  length
+00 00 01 00  #  IDT_start
+
+
+#----------------------------------------
+#stub_interrupt_handler
+#[7EB9]
+CF                    # iret
+
+
+#------------------------------------------------------------
 # 32 -> 16 -> 32 bit switching functions
-#----------------------------------------
+#------------------------------------------------------------
 # When switching between real mode and
 # protected, registers are stored here:
 #
@@ -504,136 +595,131 @@ BD 00 00 09 00  # mov ebp, 0x90000
 
 
 #----------------------------------------
-#[7E6C][61]
+#[7EBA][61]
 #:enter_16bit_real
-FA                 # cli
-A3 08 7B 00 00     # mov [0x7B08], eax  ; preserve so we can use these locally
-89 15 14 7B 00 00  # mov [0x7B14], edx  ;
-5A                 # pop edx            ; capture return address
-89 25 04 7B 00 00  # mov [0x7B04], esp  ; capture stack
+FA                    # cli
+A3 08 7B 00 00        # mov [0x7B08], eax  ; preserve so we can use these locally
+89 15 14 7B 00 00     # mov [0x7B14], edx  ;
+5A                    # pop edx            ; capture return address
+89 25 04 7B 00 00     # mov [0x7B04], esp  ; capture stack
 
-#x13
 # The following far jump sets CS to a 16-bit protected mode selector
 # and the segment registers are also set to 16-bit protected mode selectors.
 # This is done prior to entering real mode.
-EA 86 7E 00 00 18 00  # jmp 0x18:setup_16bit
-#x1A
-#[7E86]
+EA D4 7E 00 00 18 00  # jmp 0x18:setup_16bit
+#[7ED4]
 #:setup_16bit
-B8 20 00        # mov eax, 0x0020
-8E D0           # mov ss, eax
-8E D8           # mov ds, eax
-8E C0           # mov es, eax
-8E E8           # mov gs, eax
-8E E0           # mov fs, eax
-BC 00 7B        # mov sp, 0x7B00
-0F 20 C0        # mov eax, cr0
-66 83 E0 FE     # and eax, 0xfffffffe  ; clear protected mode
-0F 22 C0        # mov cr0, eax
-#x34
+B8 20 00              # mov eax, 0x0020
+8E D0                 # mov ss, eax
+8E D8                 # mov ds, eax
+8E C0                 # mov es, eax
+8E E8                 # mov gs, eax
+8E E0                 # mov fs, eax
+BC 00 7B              # mov sp, 0x7B00
+0F 20 C0              # mov eax, cr0
+66 83 E0 FE           # and eax, 0xfffffffe  ; clear protected mode
+0F 22 C0              # mov cr0, eax
 # The following far jump sets CS to a 16-bit real mode segment
 # and the segment registers are also set to real mode segments.
-EA A5 7E 00 00  # jmp 0000:XXXX  real_mode
-#39
-#[7EA5]
+EA F3 7E 00 00        # jmp 0000:XXXX  real_mode
+#[7EF3]
 #:real_mode
-B8 00 00        # mov ax, 0x0
-8E D8           # mov ds, ax
-8E E0           # mov fs, ax
-8E E8           # mov gs, ax
-8E D0           # mov ss, ax
-8E C0           # mov es, ax
-BC 00 7B        # mov sp, 0x7B00
-FA              # cli
-0F 01 1E C7 7E  # lidt IDT
-FB              # sti
-#0x50
-#[7EBC]
+B8 00 00              # mov ax, 0x0
+8E D8                 # mov ds, ax
+8E E0                 # mov fs, ax
+8E E8                 # mov gs, ax
+8E D0                 # mov ss, ax
+8E C0                 # mov es, ax
+BC 00 7B              # mov sp, 0x7B00
+FA                    # cli
+0F 01 1E 15 7F        # lidt IDT
+FB                    # sti
 # Using retf to set CS comes from here:
 # https://stackoverflow.com/questions/26448480/bios-interrupts-in-protected-mode
 # This page recommends a far jump followed by sti:
 # https://www.sudleyplace.com/pmtorm.html
-6A 00           # push 0x0000 (2 bytes!)  CS to return to
-52              # push dx  IP to return to
-a1 08 7b        # mov ax, [0x7B08]  ; restore from above
-8b 16 14 7b     # mov dx, [0x7B14]
-CB              # retf
-#0x61
+6A 00                 # push 0x0000 (2 bytes!)  CS to return to
+52                    # push dx  IP to return to
+A1 08 7B              # mov ax, [0x7B08]  ; restore from above
+8B 16 14 7b           # mov dx, [0x7B14]
+CB                    # retf
 
 # IDT
-#[7EC7]
+#[7F15]
 FF FF
 00 00 00 00
 
+
 #----------------------------------------
-#[7ECD][40]
+#[7F1B][40]
 #:resume_32bit_mode()
 # modifies: ebp and all segment registers
-FA              # cli
-A3 08 7B        # mov [0x7B08], ax  ; preserve, they might be return values from 16 bit
-89 16 24 7b     # mov [0x7B14], dx
-5A              # pop dx      ; carry the return IP in dx
-58              # pop ax      ; CS
-0F 01 16 30 7E  # lgdt GDT_locator
-0F 20 C0        # mov eax, cr0
-66 83 C8 01     # or eax, 0x01
-0F 22 C0        # mov cr0, eax
-EA EB 7E 08 00  # JMP restore_32bit
-#1E
-#[7EEB]
+FA                    # cli
+A3 08 7B              # mov [0x7B08], ax  ; preserve, they might be return values from 16 bit
+89 16 14 7b           # mov [0x7B14], dx
+5A                    # pop dx      ; carry the return IP in dx
+58                    # pop ax      ; CS
+0F 01 16 30 7E        # lgdt GDT_locator
+0F 20 C0              # mov eax, cr0
+66 83 C8 01           # or eax, 0x01
+0F 22 C0              # mov cr0, eax
+EA 39 7F 08 00        # JMP restore_32bit
+#[7F39]
 #:restore_32bit
-B8 10 00 00 00     # mov eax, 0x0010      ; data descriptor
-8E D8              # mov ds, eax
-8E D0              # mov ss, eax
-8E C0              # mov es, eax
-8E E0              # mov fs, eax
-8E E8              # mov gs, eax
-8B 25 04 7B 00 00  # mov esp, [0x7B04]   ; restore, (saved in enter_16bit_mode)
-
-52                 # push edx
+B8 10 00 00 00        # mov eax, 0x0010      ; data descriptor
+8E D8                 # mov ds, eax
+8E D0                 # mov ss, eax
+8E C0                 # mov es, eax
+8E E0                 # mov fs, eax
+8E E8                 # mov gs, eax
+8B 25 04 7B 00 00     # mov esp, [0x7B04]   ; restore, (saved in enter_16bit_mode)
+9A 73 7E 00 00 08 00  # call setup_interrupt_handlers
+52                    # push edx            ; setup our return location
 # These restore the 16 bit portion of these registers, which may be a
 # return value from a 16 bit function, and they also restore any previous high
 # bits that were stored by enter_16bit_mode so these registers need not be
 # saved when going to 16 bit mode and back if you want them left alone.
-A1 08 7B 00 00     # mov eax, [0x7B08]   ; restore, (saved at top of this function)
-8B 15 14 7B 00 00  # mov edx, [0x7B14]
-C3                 # ret
+A1 08 7B 00 00        # mov eax, [0x7B08]   ; restore, (saved at top of this function)
+8B 15 14 7B 00 00     # mov edx, [0x7B14]
+C3                    # ret
 
 
-#[7F0D][10]
-#:putc:
+# ------------------------
+#[7F62][10]
+#:console_putc:
 #
-E8 5A FF FF FF  # CALL enter_16bit_real, next=[7F12]
-9A 5F 7C 00 00  # CALL putc(al)
-9A CD 7E 00 00  # CALL resume_32bit_mode
-CB              # RETF
-
-
-#:put_hex
-#[7F1D][10]
-E8 4A FF FF FF  # CALL enter_16bit_real, next=[7F22]
-9A 75 7C 00 00  # CALL put_hex_16(al)
-9A CD 7E 00 00  # CALL resume_32bit_mode
+E8 53 FF FF FF  # CALL enter_16bit_real, next=[7F4C]
+9A 5F 7C 00 00  # CALL console_putc_16(al)
+9A 1B 7F 00 00  # CALL resume_32bit_mode
 CB              # RETF
 
 
 # ------------------------
-#[7F2D][1A]
-#:puts (ds:si = string)
-#:puts_loop
-8A 06           # mov al, [esi]
-3C 00           # cmp al, 0
-74 0A           # jz end_loop
-9A 0D 7F 00 00 08 00  # call putc
-46              # inc esi
-EB F0           # jmp puts_loop
-#:end_loop
-B0 0A           # mov al, 0A
-9A 0D 7F 00 00 08 00  # call putc
+#:console_put_hex
+#[7F72][10]
+E8 43 FF FF FF  # CALL enter_16bit_real, next=[7F5C]
+9A 75 7C 00 00  # CALL console_put_hex_16(al)
+9A 1B 7F 00 00  # CALL resume_32bit_mode
 CB              # RETF
 
 
-#[7F47][18]
+# ------------------------
+#[7F82][1A]
+#:console_puts (ds:si = string)
+#:puts_loop
+8A 06                 # mov al, [esi]
+3C 00                 # cmp al, 0
+74 0A                 # jz end_loop
+9A 62 7F 00 00 08 00  # call console_putc
+46                    # inc esi
+EB F0                 # jmp puts_loop
+#:end_loop
+B0 0A                 # mov al, 0A
+9A 62 7F 00 00 08 00  # call console_putc
+CB                    # RETF
+
+
+#[7F9C][18]
 # ------------------------
 #:get_partition_start(eax=partition_num 1..4)
 #returns:
@@ -643,99 +729,351 @@ CB              # RETF
 50              # PUSH_EAX
 56              # PUSH_ESI
 
-6b c0 10        # mul eax, eax, 0x10
-89 C6           # mov esi, eax         ; esi = entry_offset
-bb ae 7d 00 00  # mov ebx, 7DAE        ; ebx = &partition_table[-1]
-8a 74 33 01     # mov dh, [ebx+esi+1]  ; dh = head = partition_table[al][0]
-66 8b 4c 33 02  # mov cx, [ebx+esi+2]  ; cx = cyl/sector = partition_table[al][1]
+6B C0 10        # imul eax, 0x10
+89 c6           # mov esi, eax         ; esi = entry_offset
+BB AE 7D 00 00  # mov ebx, 7DAE        ; ebx = &partition_table[-1]
+8A 74 33 01     # mov dh, [ebx+esi+1]  ; dh = head = partition_table[al][0]
+66 8B 4C 33 02  # mov cx, [ebx+esi+2]  ; cx = cyl/sector = partition_table[al][1]
 
 5E              # POP_ESI
 58              # POP_EAX
 CB              # retf
 
-#[7F5F][1E]
-                                             90
-90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90
-90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90
 
-90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90
-90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90
-90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90
-90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90
+# ------------------------
+#[7FB4][10]
+#:read_sectors(di = *dest_addr, cx=cylinder/sector, dh = head, ax=num_sectors)
+E8 01 FF FF FF  # CALL enter_16bit_real, next=[7F9E]
+9A 1F 7D 00 00  # CALL read_sectors_16
+9A 1B 7F 00 00  # CALL resume_32bit_mode
+CB              # RETF
 
-#[7FC0]
+
+# ------------------------
+#[7FC4][29]
+#:syscall_interrupt_handler
+83 F8 01              # cmp eax, 1
+75 07                 # jne try next
+9A 99 99 00 00 08 00  # call handle_syscall_exit
+
+83 F8 02              # cmp eax, 2
+75 07                 # jne try next
+9A 99 99 00 00 08 00  # call handle_syscall_fork
+
+83 F8 03              # cmp eax, 3
+75 07                 # jne try next
+9A 80 80 00 00 08 00  # call handle_syscall_read
+
+83 F8 04              # cmp eax, 4
+75 07                 # jne try next
+9A 99 99 00 00 08 00  # call handle_syscall_write
+
+83 F8 05              # cmp eax, 5
+75 07                 # jne try next
+9A 2D 80 00 00 08 00  # call handle_syscall_open
+
+83 F8 07              # cmp eax, 7
+75 07                 # jne try next
+9A 99 99 00 00 08 00  # call handle_syscall_waitpid
+
+83 F8 0B              # cmp eax, B
+75 07                 # jne try next
+9A 99 99 00 00 08 00  # call handle_syscall_execve
+
+83 F8 2D              # cmp eax, 2D
+75 07                 # jne try next
+9A 99 99 00 00 08 00  # call handle_syscall_brk
+
+CF                    # iret
+
+#[8025][08]
+#s  c  /  o  p  e  n \0
+73 63 2F 6F 70 65 6E 00
+
+
+#------------------------------------------------------------
+#[802D][20]
+#:handle_syscall_open(ebx=filename, ecx=flags)
+#USAGE:
+#BB D2 7F 00 00        # mov ebx, 0x00007FD2 == &"filename"
+#B8 05 00 00 00        # mov eax, 5  ; syscall=open
+#B9 00 00 00 00        # mov ecx, 0  ; read only
+#CD 80                 # int 80
+#83 F8 00              # cmp eax, 0
+#7E 43                 # jle error_exit
+#A3 46 80 00 00        # mov 0x00008046, eax  source_file = eax
+#------------------------------------------------------------
+56                    # push esi
+57                    # push edi
+51                    # push ecx
+
+50                    # push eax
+B8 25 80 00 00        # mov eax,  "sc/open"
+89 C6                 # mov esi, eax
+9A 82 7F 00 00 08 00  # call console_puts
+58                    # pop eax
+
+89 DE                 # mov esi, ebx
+9A 82 7F 00 00 08 00  # call console_puts
+
+# finish
+59                    # pop ecx
+5F                    # pop edi
+5E                    # pop esi
+
+CB                    # ret
+
+
+#[804D]
+                                       00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+#[8080][70]
+#:handle_syscall_read(ecx=*return_char, ebx=file)
+50                    # push eax
+53                    # push ebx
+51                    # push ecx
+52                    # push edx
+56                    # push esi
+57                    # push edi
+
+51                    # push ecx   ; we need this later to return char
+83 FB 01              # cmp ebx, 1
+75 29                 # jne finish, TODO: memfile
+
+# stdin is /dev/hda4
+# get current position
+66 8B 0D 00 08 01 00  # mov cx, [0x10800]  ; cyl/sector
+8A 35 02 08 01 00     # mov dh, [0x10802]  ; head
+31 C0                 # xor eax, eax
+66 A1 04 08 01 00     # mov ax, [0x10804]  ; offset
+
+#end of sector?
+66 3D ff 01           # cmp ax, 0x01ff
+74 04                 # je next sector
+
+#nextchar:
+66 40                 # inc ax
+EB 31                 # jmp getchar
+
+#read next sector
+BF 00 A0 00 00        # mov edi, 0x000A000
+B8 01 00 00 00        # mov eax, 0x0001   ; num_sectors = 1
+9A B4 7F 00 00 08 00  # call read_sectors
+
+# save new location and offset
+66 89 0D 00 08 01 00  # mov [0x10800], cx
+88 35 02 08 01 00     # mov [0x10802], dh
+31 C0                 # xor eax, eax
+
+# move block to device buffer
+BE 00 A0 00 00        # mov esi, 0x000A000
+BF 00 00 02 00        # mov edi, 0x0020000
+B9 00 02 00 00        # mov ecx, 0x0000200
+F3 A4                 # rep movsb
+
+#getchar:
+66 A3 04 08 01 00     # mov [0x10804], ax
+59                    # pop ecx
+BB 00 00 02 00        # mov ebx, 0x20000    ; device buffer
+89 C6                 # mov esi, eax        ; offset
+8A 04 33              # mov al, [ebx+esi+0]
+
+88 01                 # mov [ecx], al
+
+#finish:
+5F                    # pop eax
+5E                    # pop ebx
+5A                    # pop ecx
+59                    # pop edx
+5B                    # pop esi
+58                    # pop edi
+CB                    # ret
+
+
+00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+
+#:handle_syscall_brk
+#:handle_syscall_write
+#:handle_syscall_fork
+#:handle_syscall_execve
+#:handle_syscall_waitpid
+#:handle_syscall_exit
+
+
+#:create_file
+#:create_process
+#:relocate_process
+
+#------------------------------------------------------------
+# The Standard Library
+#------------------------------------------------------------
+#:open_read
+#:open_write
+
+
+
+#:read
+
+
+#:brk
+
+
+#:write
+
+
+#:fork
+
+
+#:execve
+
+
+#:exit
+
+# ------------------------------------------------------------
+# Utilities
+# ------------------------------------------------------------
+
+#[8142]
+# src
+
+
+#[8142]
+# hex0
+
+
+# ----------------------------------------
+# variables for main program
+#
+#[8142]  char input_char
+00 
+
+#[8143]
 # ------------------------------------------------------------
 # Main Program Body
 # ------------------------------------------------------------
 #:app_main (dl=boot_drive)
+# Set up /dev/hda4 as global stdin
+B8 04 00 00 00        # mov eax, 4
+9A 9C 7F 00 00 08 00  # call get_partition_start(4)
 
-# debug
-B0 82           # mov al, 82
-9A 1D 7F 00 00 08 00  # call put_hex
+# save disk location and byte offset to descriptor
+66 89 0D 00 08 01 00  # mov [0x10800], cx
+88 35 02 08 01 00     # mov [0x10802], dh
+# start at "end of sector" to trigger an initial sector read
+66 B9 FF 01           # mov cx, 0x01FF
+66 89 0D 04 08 01 00  # mov [0x10804], cx
 
-b8 01 00 00 00        # mov ax, 1
-9A 47 7F 00 00 08 00  # call get_partition_start(4)
+#:process_command:
+#:read_char
+BA 01 00 00 00        # mov edx, 1   1 byte characters
+B9 42 81 00 00        # mov ecx, &input_char
+bb 01 00 00 00        # mov ebx, 1   ;
+B8 03 00 00 00        # mov eax, 3   ; syscall=read
 
-88 C8                 # mov al, cl
-9A 1D 7F 00 00 08 00  # call put_hex
+CD 80                 # int 80 syscall
+85 C0                 # test eax, eax
+74 14                 # je error_exit
 
-88 E8                 # mov al, ch
-9A 1D 7F 00 00 08 00  # call put_hex
+A0 42 81 00 00        # mov al, &input_char
+3C 00                 # cmp al, 0               ; check_end
+74 09                 # je finish_success
 
-88 F0                 # mov al, dh
-9A 1D 7F 00 00 08 00  # call put_hex
+9A 62 7F 00 00 08 00  # call console_putc
 
-# debug
+EB D4                 # jmp process_command
+
+#check_src_command
+#3C 73                 # cmp al, 's'
+#75 09                 # jne check_hex0
+
+#handle_src_command
+#9A 46 80 00 00 00 00  # call src
+#90 90 90 90 90 90 90
+#EB C0                 # jmp process_command
+
+#check_hex0_command
+#3C 68                 # cmp al, 'h'
+#75 BC                 # jne handle_other_command
+
+#handle_hex0_command
+#90 90 90 90 90 90 90
+#9A 46 80 00 00 00 00  # call hex0
+#EB B3                 # jmp process_command
+
+#handle_other_command:
+
+#:src command
+#:hex0 command
+
+#finish_success
+#zero source
+#call reboot
+
+#:error_exit
 B8 16 7C 00 00        # mov eax, "Halting..."
 89 C6                 # mov esi, eax
-9A 2D 7F 00 00 08 00  # call puts
+9A 82 7F 00 00 08 00  # call console_puts
 
 # one space to flush last line
 B0 20                 # mov al, 20
-9A 0D 7F 00 00 08 00  # call putc
+9A 62 7F 00 00 08 00  # call console_putc
 
-FA                    # cli
-F4                    # halt
+FA F4
+
 
 # END Program Body
 
+00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
-#[8009]
-                           00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-#[8040]
+#[8200]
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-#[8080]
+
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-#[80C0]
+
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-#[8100]
+#[82C0]
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-#[8140]
+#[8300]
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-#[8180]
+#[8340]
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-#[81C0]
+#[8380]
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+#[83C0]
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
