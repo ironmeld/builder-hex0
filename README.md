@@ -41,7 +41,7 @@ source code is applied again.
 
 
 ## Machine Requirements
-* x86-16 Processor
+* x86 32 bit Processor
 * PC compatible-BIOS
    * Must support int 10h,AH=0Eh (Write character to console)
    * Must support int 13h,AH=02h (Read Sectors)
@@ -99,7 +99,7 @@ System calls are accessed via interrupt 0x80.
 
 The following system calls are implemented to some extent:
 * read, AH=03
-
+* write, AH=04
 
 The following kernel functions are also available to the user/shell layer.
 * halt() - does not return
@@ -108,6 +108,7 @@ The following kernel functions are also available to the user/shell layer.
 
 ## The Builder Standard Library
 * read()
+* write()
 
 
 ## The Hex0 Language
