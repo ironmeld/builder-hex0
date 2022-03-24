@@ -12,9 +12,9 @@ To build an image that is ready to build (builder-hex0.img):
 make
 ```
 
-You can also build the boot sector manually:
+You can also build the boot sectors manually:
 ```
-cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > builder-hex0.mbr
+cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > builder-hex0.bin
 ```
 * cut will strip comments starting with pound or semicolon.
 * xxd converts hex to binary.
@@ -30,9 +30,11 @@ source code is applied again.
 
 ### General Build Instructions
 1. Convert builder-hex0.hex0 to binary
-2. Append zero bytes for a total length of 29696 bytes
-3. Place the hex0 source to be compiled at offset 5120
-    * The source must be zero terminated, so the maximum length is 24569 bytes.
+2. Append bytes for a total length of 68608 bytes
+3. Place the shell script for your build directly on partition 4 of the disk image
+    * Partition 4 starts at sector 7 which is byte offset 3072 of the disk
+    * The script must be zero terminated, so the maximum length is 65535 bytes (+1 zero byte)
+    * See the `check` target in the Makefile for guidance
 4. Launch the PC with the disk image
 5. Wait until the machine reboots and then halts
 6. The disk image itself is the result of the build
@@ -41,22 +43,71 @@ source code is applied again.
 ## Machine Requirements
 * x86-16 Processor
 * PC compatible-BIOS
+   * Must support int 10h,AH=0Eh (Write character to console)
+   * Must support int 13h,AH=02h (Read Sectors)
+   * Must support int 13h,AH=08h (Read Drive Parameters)
    * Must support int 15h,0x2401 (A20 activation)
-   * Must support int 13h,AH=08h (Read\_Drive\_Parameter)
+
+
+## The Builder Shell
+The builder shell is the first "process" to start although it is really just a function embedded in the kernel.
+
+This internal shell reads commands from standard input.
+The kernel provides this input by reading the contents of the fourth disk partition.
+
+Essentially, the kernel starts by executing the equivalent of this command:
+```
+cat /dev/hda4 | internalshell
+```
+
+The internal shell supports two commands:
+* src: create source file from stdin.
+* hex0: compile hex0 file to binary file.
+
+### The src command
+
+```
+src $number_of_lines $filename 
+```
+Read N lines from standard input and write to a file.
+
+Example:
+```
+src 4 foo.hex0
+45 23 23
+23 45
+53 55
+53 55
+```
+
+### The hex0 command
+
+The hex0 command implements a compiler for the Hex0 language. 
+The hex0 language is described later in this document.
+
+```
+hex0 $input_hex0_file $output_binary_file
+```
+
+Reads hex0 from the input file, converts to binary, and writes to the output file.
 
 
 ## The Hex0 Builder System Interface
-There is no system interface provided to the Standard Library.
 
-Library routines directly invoke the BIOS.
+System calls are implemented with a linux i386 ABI interface.
+System calls are accessed via interrupt 0x80.
 
-## The Hex0 Builder Standard Library
+The following system calls are implemented to some extent:
+* read, AH=03
+
+
+The following kernel functions are also available to the user/shell layer.
 * halt() - does not return
 * reboot() - does not return
-* putc()
-* puts()
-* read_source()
-* write_image()
+
+
+## The Builder Standard Library
+* read()
 
 
 ## The Hex0 Language
@@ -106,18 +157,6 @@ characters
 character
     '0020' . '00FF' - '000A' - '0000'
 ```
-
-
-## The Hex0 Compiler
-The compiler runs automatically when the machine boots.
-
-
-## The Hex0 Shell
-There is no shell in this release.
-
-
-## Wish List for the Next System
-A small shell to control the build process.
 
 
 ## Research Sources
