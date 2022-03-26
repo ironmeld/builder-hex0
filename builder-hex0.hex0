@@ -775,12 +775,12 @@ CF                    # iret
 
 83 F8 03              # cmp eax, 3
 75 08                 # jne try next
-9A A8 80 00 00 08 00  # call handle_syscall_read
+9A A7 80 00 00 08 00  # call handle_syscall_read
 CF                    # iret
 
 83 F8 04              # cmp eax, 4
 75 08                 # jne try next
-9A 20 81 00 00 08 00  # call handle_syscall_write
+9A 1F 81 00 00 08 00  # call handle_syscall_write
 CF                    # iret
 
 83 F8 05              # cmp eax, 5
@@ -877,11 +877,8 @@ A3 36 80 00 00        # mov [next_fileno], eax
 CB                    # ret
 
 
-90
-
-
 #------------------------------------------------------------
-#[80A8][70]
+#[80A7][70]
 #:handle_syscall_read(ecx=*return_char, ebx=file)
 50                    # push eax
 53                    # push ebx
@@ -954,7 +951,7 @@ CB                    # ret
 
 
 #------------------------------------------------------------
-#[8120]
+#[811F]
 #:handle_syscall_write(ebx=file,ecx=*char_to_write)
 50                    # push eax
 51                    # push ecx
@@ -1011,7 +1008,7 @@ FF 06                 # inc long [esi]            ; current_offset++
 58                    # pop eax
 CB                    # ret
 
-                              00 00 00 00 00 00
+                           00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
@@ -1257,9 +1254,20 @@ CB                    # ret
          00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+#:handle_other_command
+#[83CC]
+BE 1D 82 00 00        # mov esi, "sc/exec"
+9A 82 7F 00 00 08 00  # call console_puts
+
+9A 62 7F 00 00 08 00  # call console_putc
+9A 27 82 00 00 08 00  # call read
+3C 0A                 # cmp al, '\n'
+75 EE                 # jne gather_other_command
+9A 62 7F 00 00 08 00  # call console_putc
+CB
+
+00 00 00 00 00 00 00 00 00 00
 
 #[83FC]
 # ------------------------------------------------------------
@@ -1283,7 +1291,7 @@ B8 04 00 00 00        # mov eax, 4
 #:process_command:
 9A 27 82 00 00 08 00  # call read
 3C 00                 # cmp al, 0           ; check_end
-74 3A                 # je finish_success
+74 23                 # je finish_success
 
 #check_src_command
 3C 73                 # cmp al, 's'
@@ -1303,20 +1311,12 @@ EB DB                 # jmp process_command
 
 #handle_other_command:
 #gather_other_command:
-BE 1D 82 00 00        # mov esi, "sc/exec"
-9A 82 7F 00 00 08 00  # call console_puts
-
-9A 62 7F 00 00 08 00  # call console_putc
-9A 27 82 00 00 08 00  # call read
-3C 0A                 # cmp al, '\n'
-75 EE                 # jne gather_other_command
-9A 62 7F 00 00 08 00  # call console_putc
+9A CC 83 00 00 08 00  # call handle_other_command
+EB D2                 # jmp process_command
 
 #finish_success
 #zero source
 #call reboot
-EB AC                 # jmp process_command
-
 #:error_exit
 BE 16 7C 00 00        # mov esi, "Halting..."
 9A 82 7F 00 00 08 00  # call console_puts
@@ -1331,7 +1331,9 @@ FA F4
 
 
 #[848 ]
-               00 00 00 00 00 00 00 00 00 00 00
+                     00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
