@@ -25,7 +25,7 @@ builder-hex0.img: builder-hex0.bin
 builder-hex0.bin: builder-hex0.hex0
 	cut $^ -f1 -d'#' | cut -f1 -d';' | xxd -r -p > $@
 	# if not right size, show the length then remove it
-	[ `wc -c $@ | cut -f1 -d' '` = "2048" ] || (ls -l $@;rm $@;exit 1)
+	[ `wc -c $@ | cut -f1 -d' '` = "2560" ] || (ls -l $@;rm $@;exit 1)
 
 recursive: builder-hex0.img
 
