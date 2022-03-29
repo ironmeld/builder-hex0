@@ -54,15 +54,14 @@
 # 401400 - 4017FF file name 5
 # 401000 - 4013FF file name 4
 # 400010 - 400FF0 file lengths 4*1022
-# 380000 - 3FFFFF io buffers/free
-# 300010 - 300FF0 start address of files 4 * 1022
+# 300000 - 3FFFFF io buffers/free
 # 200800 - 2FFFFF cmd arg3..1024 (1022 args * 1K)
 # 200400 - 2007FF cmd arg2 (1K)
 # 200000 - 2003FF cmd arg1 (1K)
 # 100000 - 1FFFF0 32 bit stack (1M)
 #  9FC00 -  FFFFF BIOS
 #  20000 -  9FBFF device buffers
-#  10800 -  1FFFF opened file descriptors (8 bytes each)
+#  10800 -  1FFFF opened file descriptors (16 bytes each)
 #  10000 -  10800 interrupt table
 #   A000 -   A1FF sector read buffer - 16bit
 #   7C00 -   8600 code
@@ -844,9 +843,9 @@ B9 00 04 00 00        # mov ecx, 0x0000400
 F3 A4                 # rep movsb
 
 # set address of file
-BF 00 00 30 00        # mov edi, 0x0300000
+BF 04 08 01 00        # mov edi, 0x0010804
 A1 36 80 00 00        # mov eax, [&next_fileno]
-C1 E0 02              # shl eax, 02
+C1 E0 04              # shl eax, 04
 01 C7                 # add edi, eax
 8B 0D 3A 80 00 00     # mov ecx, [0x803A]
 C7 01 00 00 00 00     # mov long [ecx], 0
@@ -891,15 +890,14 @@ EB 19                 # jmp finish
 89 D0                 # mov eax, edx
 
 # set read offset to start of file
-BE 00 08 01 00        # mov esi, 0x0010804
-C1 E2 03              # shl edx, 03
+BE 00 08 01 00        # mov esi, 0x0010800
+C1 E2 04              # shl edx, 04
 01 D6                 # add esi, edx
 31 D2                 # xor edx, edx
-89 16                 # mov [esi], edx       ; mov edx, current offset
+89 56 0C              # mov [esi+0xC], edx       ; mov edx, current offset
 
 90 90 90 90
 90 90 90 90
-90
 
 # finish
 59                    # pop ecx
@@ -965,27 +963,20 @@ EB 2D                 # jmp finish
 #memfile:
 
 # get file address
-BE 00 00 30 00        # mov esi, 0x0300000   ; pfile_addr = &file_address[0]
+BE 00 08 01 00        # mov esi, 0x0010800     ; pfile_addr = &file_address[0]
 89 D9                 # mov ecx, ebx
-C1 E1 02              # shl ecx, 02
-01 CE                 # add esi, ecx         ; pfile_addr += sizeof(file_address) * fileno
-8B 0E                 # mov ecx, [esi]       ; mov ecx, [&fileaddr]
+C1 E1 04              # shl ecx, 04
+01 CE                 # add esi, ecx           ; pfile_addr += sizeof(file_address) * fileno
+8B 4E 04              # mov ecx, [esi+4]       ; mov ecx, [&fileaddr]
 # get current read offset from descriptor
-BE 00 08 01 00        # mov esi, 0x0010804   ; pcurrent_offset = &file_descriptor[0].address
-89 DA                 # mov edx, ebx
-C1 E2 03              # shl edx, 03
-01 D6                 # add esi, edx         ; pcurrent_offset += sizeof(descriptor) * fileno
-8B 16                 # mov edx, [esi]       ; mov edx, current offset
-FF 06                 # inc long [esi]       ; *pcurrent_offset++
-
-90 90 90 90
-90 90 90 90 90
-
+8B 56 0C              # mov edx, [esi+0C]      ; mov ecx, [&fileaddr]
+FF 46 0C              # inc long [esi+0C]      ; *pcurrent_offset++
 8A 04 11              # mov al, [ecx+edx]
 59                    # pop ecx
 88 01                 # mov [ecx], al
 
-90 90 90 90 90
+90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90
+90 90 90
 
 #finish:
 5F                    # pop edi
@@ -1028,24 +1019,22 @@ EB 36                 # jmp finish
 #memfile
 #ebx=filenum
 # get file address
-BE 00 00 30 00        # mov esi, 0x0300000
+BE 00 08 01 00        # mov esi, 0x0010800     ; pfile_addr = &file_address[0]
 89 D9                 # mov ecx, ebx
-C1 E1 02              # shl ecx, 02
+C1 E1 04              # shl ecx, 04
 01 CE                 # add esi, ecx
-8B 0E                 # mov ecx, [esi]       ; mov ecx, [&fileaddr]
+8B 4E 04              # mov ecx, [esi+4]     ; mov ecx, [&fileaddr]
 # get current write offset from descriptor
-BE 00 08 01 00        # mov esi, 0x0010804
-89 DA                 # mov edx, ebx
-C1 E2 03              # shl edx, 03
-01 D6                 # add esi, edx
-8B 16                 # mov edx, [esi]       ; mov edx, current offset
-FF 06                 # inc long [esi]       ; current_offset++
+8b 56 0c              # mov edx, [esi+0xC]   ; mov edx, current offset
+ff 46 0c              # inc long [esi+0xC]   ; current_offset++
 
 01 D1                 # add ecx, edx
 88 01                 # mov [ecx], al
 
 90 90 90 90
-90 90 90
+90 90 90 90
+90 90 90 90
+90 90 90 90
 
 89 0D 3A 80 00 00     # mov ecx, [0x803A]
 41                    # inc ecx              ; *next_file_addr++
@@ -1269,11 +1258,11 @@ CD 80                 # int 80
 # eax has the open file number
 
 # readwrite_loop:
-BF 00 00 38 00        # mov edi, 0x00380000   ; io buffer
+BF 00 00 30 00        # mov edi, 0x00300000   ; io buffer
 31 DB                 # xor ebx, ebx   ; ebx=0=stdin
 9A 73 82 00 00 08 00  # call read_line
 89 C3                 # mov ebx, eax          # prepare to write
-BE 00 00 38 00        # mov esi, 0x00380000
+BE 00 00 30 00        # mov esi, 0x00300000
 9A 82 82 00 00 08 00  # call write_line
 49                    # dec ecx   ; count--
 75 E1                 # jnz read_write_loop
