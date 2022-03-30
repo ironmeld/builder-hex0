@@ -774,12 +774,12 @@ CF                    # iret
 
 83 F8 03              # cmp eax, 3
 75 08                 # jne try next
-9A 16 81 00 00 08 00  # call handle_syscall_read
+9A 17 81 00 00 08 00  # call handle_syscall_read
 CF                    # iret
 
 83 F8 04              # cmp eax, 4
 75 08                 # jne try next
-9A C0 81 00 00 08 00  # call handle_syscall_write
+9A C8 81 00 00 08 00  # call handle_syscall_write
 CF                    # iret
 
 83 F8 05              # cmp eax, 5
@@ -831,7 +831,7 @@ BE 2E 80 00 00        # mov esi, "sc/open"
 9A 82 7F 00 00 08 00  # call console_puts
 
 F7 C1 01 00 00 00     # test ecx, 1
-74 51                 # jz open_read
+74 58                 # jz open_read
 
 # copy filename to new slot
 89 DE                 # mov esi, ebx
@@ -852,6 +852,7 @@ C7 01 00 00 00 00     # mov long [ecx], 0
 41                    # inc ecx
 89 0D 3A 80 00 00     # mov [0x803A], ecx
 89 0F                 # mov [edi], ecx
+C7 47 04 00 00 00 00  # mov long [edi+4], 0
 
 A1 36 80 00 00        # mov eax, [next_fileno]
 40                    # inc eax
@@ -905,12 +906,10 @@ C1 E2 04              # shl edx, 04
 5E                    # pop esi
 CB                    # ret
 
-90 90 90 90 90 90
 
 #------------------------------------------------------------
-#[8116][70]
+#[8117][70]
 #:handle_syscall_read(ecx=*return_char, ebx=file)
-50                    # push eax
 53                    # push ebx
 51                    # push ecx
 52                    # push edx
@@ -919,7 +918,7 @@ CB                    # ret
 
 51                    # push ecx   ; we need this later to return char
 83 FB 00              # cmp ebx, 0
-75 65                 # jne memfile
+75 6A                 # jne memfile
 
 # stdin is /dev/hda4
 # get current position
@@ -958,6 +957,7 @@ BB 00 00 02 00        # mov ebx, 0x20000    ; device buffer
 89 C6                 # mov esi, eax        ; offset
 8A 04 33              # mov al, [ebx+esi+0]
 88 01                 # mov [ecx], al
+B8 01 00 00 00        # mov eax, 1
 EB 2D                 # jmp finish
 
 #memfile:
@@ -971,12 +971,20 @@ C1 E1 04              # shl ecx, 04
 # get current read offset from descriptor
 8B 56 0C              # mov edx, [esi+0C]      ; mov ecx, [&fileaddr]
 FF 46 0C              # inc long [esi+0C]      ; *pcurrent_offset++
+8b 46 08              # mov eax, [esi+0x08]
+48                    # dec eax
+39 C2                 # cmp edx, eax
+7F 0D                 # jg eof
+
 8A 04 11              # mov al, [ecx+edx]
 59                    # pop ecx
 88 01                 # mov [ecx], al
+B8 01 00 00 00        # mov eax, 1
+EB 03                 # jmp finish
 
-90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90
-90 90 90
+#eof:
+31 C0                 # xor eax, eax
+59                    # pop ecx
 
 #finish:
 5F                    # pop edi
@@ -984,16 +992,21 @@ FF 46 0C              # inc long [esi+0C]      ; *pcurrent_offset++
 5A                    # pop edx
 59                    # pop ecx
 5B                    # pop ebx
-58                    # pop eax
 CB                    # ret
 
 
 #------------------------------------------------------------
 #:handle_syscall_brk
+90 90 90 90
+90 90 90 90
+90 90 90 90
+90 90 90 90
+90 90 90 90
+90 90 90
 
 
 #------------------------------------------------------------
-#[81C0]
+#[81C8]
 #:handle_syscall_write(ebx=file,ecx=*char_to_write)
 50                    # push eax
 51                    # push ecx
@@ -1003,18 +1016,13 @@ CB                    # ret
 # get char to write
 8A 01                 # mov al, [ecx]
 
-90 90 90 90
-90 90 90 90
-90 90 90 90
-90 90
-
 # stdout?
 83 FB 01              # cmp ebx, 01
 75 09                 # jnz memfile
 
 # stdout -> console_out
 9A 62 7F 00 00 08 00  # call console_putc
-EB 36                 # jmp finish
+EB 2E                 # jmp finish
 
 #memfile
 #ebx=filenum
@@ -1027,14 +1035,13 @@ C1 E1 04              # shl ecx, 04
 # get current write offset from descriptor
 8b 56 0c              # mov edx, [esi+0xC]   ; mov edx, current offset
 ff 46 0c              # inc long [esi+0xC]   ; current_offset++
+ff 46 08              # inc long [esi+0x8]   ; file_length++
 
 01 D1                 # add ecx, edx
 88 01                 # mov [ecx], al
 
 90 90 90 90
-90 90 90 90
-90 90 90 90
-90 90 90 90
+90
 
 89 0D 3A 80 00 00     # mov ecx, [0x803A]
 41                    # inc ecx              ; *next_file_addr++
@@ -1086,20 +1093,28 @@ B9 25 82 00 00        # mov ecx, &io_char
 BA 01 00 00 00        # mov edx, 1   1 byte characters
 
 CD 80                 # int 80 syscall
-85 C0                 # test eax, eax
-74 05                 # je error_exit
 
+3C 00                 # cmp al, 0
+74 07                 # je finish
+
+B4 01                 # mov ah, 1
 A0 25 82 00 00        # mov al, &io_char
+
+#finish
 5A                    # pop edx
 59                    # pop ecx
 5B                    # pop ebx
 CB                    # ret
 
 #:brk
-90 90 90 90 90
+90 90 90 90
+90 90 90 90
+90 90 90 90
+90 90 90 90
+90 90 90
 
 
-#[824D][26]
+#[825D][26]
 #:write
 50                    # push eax
 53                    # push ebx
@@ -1132,7 +1147,7 @@ CB                    # ret
 # Utilities
 # ------------------------------------------------------------
 
-#[8273][0F]
+#[8283][0F]
 #read_line(ebx=file, edi=linemem)
 50                    # push eax
 9A 27 82 00 00 08 00  # call read
@@ -1143,12 +1158,12 @@ AA                    # stosb
 CB                    # ret
 
 
-#[8282][0F]
+#[8292][0F]
 #write_line(ebx=file, esi=linemem)
 50                    # push eax
 #write_char
 AC                    # lodsb
-9A 4D 82 00 00 08 00  # call write
+9A 5D 82 00 00 08 00  # call write
 3C 0A                 # cmp al, '\n'
 75 F4                 # jne write_char
 
@@ -1156,7 +1171,7 @@ AC                    # lodsb
 CB                    # ret
 
 
-#[8291][04]
+#[82A1][04]
 #s  r  c \0
 73 72 63 00
 
@@ -1168,7 +1183,7 @@ CB                    # ret
 # Then, read a file name to create.
 # Read a newline.
 # Then, read N lines from stdin and write to the new file.
-#[8295]
+#[82A5]
 #:src
 50                    # push eax
 53                    # push ebx
@@ -1181,7 +1196,7 @@ CB                    # ret
 
 90 90
 
-BE 91 82 00 00        # mov esi,  "src"
+BE A1 82 00 00        # mov esi,  "src"
 9A 82 7F 00 00 08 00  # call console_puts
 
 9A 27 82 00 00 08 00  # call read 'r'
@@ -1221,10 +1236,6 @@ B9 00 08 00 00        # mov ecx, 0x00000800
 
 90 90 90 90
 90 90 90 90
-90 90 90 90
-90 90 90 90
-90 90 90 90
-90 90 90 90
 90 90
 
 51                    # push ecx
@@ -1260,10 +1271,10 @@ CD 80                 # int 80
 # readwrite_loop:
 BF 00 00 30 00        # mov edi, 0x00300000   ; io buffer
 31 DB                 # xor ebx, ebx   ; ebx=0=stdin
-9A 73 82 00 00 08 00  # call read_line
+9A 83 82 00 00 08 00  # call read_line
 89 C3                 # mov ebx, eax          # prepare to write
 BE 00 00 30 00        # mov esi, 0x00300000
-9A 82 82 00 00 08 00  # call write_line
+9A 92 82 00 00 08 00  # call write_line
 49                    # dec ecx   ; count--
 75 E1                 # jnz read_write_loop
 
@@ -1372,7 +1383,7 @@ CD 80                 # int 80
 90 90 90 90
 90 90 90
 
-84 C0                 # test al, al
+84 e4                 # test ah, ah
 75 04                 # jnz check_command
 5F                    # POP_DI
 5E                    # POP_SI
@@ -1445,11 +1456,12 @@ EB 8A                 # jmp read_loop
 08 C7                 # or bh, al
 88 F8                 # mov al, bh
 
-9A 72 7F 00 00 08 00  # call put_hex
+90 90 90 90 90 90 90
+
 52 # push edx
 53                    # push ebx
 89 D3                 # mov ebx, edx
-9A 4D 82 00 00 08 00  # call write
+9A 5D 82 00 00 08 00  # call write
 5B                    # pop ebx
 5A # pop edx
 
@@ -1515,7 +1527,7 @@ B8 04 00 00 00        # mov eax, 4
 75 09                 # jne check_hex0
 
 #handle_src_command
-9A 95 82 00 00 08 00  # call src
+9A A5 82 00 00 08 00  # call src
 EB E8                 # jmp process_command
 
 #check_hex0_command
