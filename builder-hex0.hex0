@@ -1308,10 +1308,6 @@ B9 00 08 00 00        # mov ecx, 0x00000800
 49                    # dec ecx
 75 FA                 # jnz zeroloop
 
-90 90 90 90
-90 90 90 90
-90 90 90
-
 BA 00 00 20 00        # mov edx, 0x00200000
 #get_file_name1_loop
 9A 27 82 00 00 08 00  # call read
@@ -1365,7 +1361,7 @@ CD 80                 # int 80
 90 90 90 90
 90
 
-#[8442]
+#[843E]
 #:read_loop
 53                    # push ebx
 89 CB                 # mov ebx, ecx
@@ -1427,11 +1423,10 @@ EB 18                 # jmp maybe_store
 53                    # push ebx
 89 CB                 # mov ebx, ecx
 9A 27 82 00 00 08 00  # call read
-90 90 90 90 90 90 90
 5B                    # pop ebx
 3C 0A                 # cmp al, '\n'
-75 EA                 # jnz skip_comment
-EB 97                 # jmp read_loop
+75 F1                 # jnz skip_comment
+EB 9E                 # jmp read_loop
 
 # only store on second digit
 #:maybe_store
@@ -1443,44 +1438,31 @@ EB 97                 # jmp read_loop
 C0 E0 04              # shl al, 4
 88 C7                 # mov bh, al
 FE C3                 # inc bl
-EB 8A                 # jmp read_loop
+EB 91                 # jmp read_loop
 
 # If on second digit, store and clear state
 #:second_digit
 08 C7                 # or bh, al
 88 F8                 # mov al, bh
 
-90 90 90 90 90 90 90
-
-52 # push edx
 53                    # push ebx
 89 D3                 # mov ebx, edx
 9A 5D 82 00 00 08 00  # call write
 5B                    # pop ebx
-5A # pop edx
-
-90 90 90 90
-90 90 90 90
-90 90 90
 
 31 DB                 # xor bx, bx
+EA 3E 84 00 00 08 00  # jmp read_loop
 
-EA 42 84 00 00 08 00                 # jmp read_loop
-#EB 69
-
-#:end_read_loop
-5F                    # POP_DI
-5E                    # POP_SI
-5B                    # POP_BX
-
-CB                    # RETF
 
 90 90 90 90
 90 90 90 90
 90 90 90 90
+90 90 90 90
+90 90 90 90
+90 90
 
 #:handle_other_command
-#[84F4]
+#[84D4]
 BE 1D 82 00 00        # mov esi, "sc/exec"
 9A 82 7F 00 00 08 00  # call console_puts
 
@@ -1491,6 +1473,14 @@ BE 1D 82 00 00        # mov esi, "sc/exec"
 9A 62 7F 00 00 08 00  # call console_putc
 CB
 
+90 90 90 90
+90 90 90 90
+90 90 90 90
+90 90 90 90
+90 90 90 90
+90 90 90 90
+90 90 90 90
+90 90 90 90
 
 #[851A]
 # ------------------------------------------------------------
@@ -1534,7 +1524,7 @@ EB DB                 # jmp process_command
 
 #handle_other_command:
 #gather_other_command:
-9A F4 84 00 00 08 00  # call handle_other_command
+9A D4 84 00 00 08 00  # call handle_other_command
 EB D2                 # jmp process_command
 
 #finish_success
