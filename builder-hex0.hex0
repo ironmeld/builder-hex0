@@ -856,10 +856,11 @@ A1 36 80 00 00        # mov eax, [next_filenum]
 A3 36 80 00 00        # mov [next_filenum], eax  ; next_filenum++
 48                    # dec eax
 9A 72 7F 00 00 08 00  # call console_put_hex
-EB 16                 # jmp finish
+EB 18                 # jmp finish
 
 #open_read
-9A D1 80 00 00 08 00  # call find_file
+9A D3 80 00 00 08 00  # call find_file
+89 C2                 # mov edx, eax
 # set read offset to start of file
 BE 00 08 01 00        # mov esi, 0x0010800       ; pfile_descriptor = &file_descriptor[0]
 C1 E2 04              # shl edx, 04
@@ -875,7 +876,7 @@ CB                    # ret
 
 
 #----------------------------------------
-#[80D1]
+#[80D3]
 #:find_file(char * ebx=file_name) returns eax=filenum
 51                    # push ecx
 52                    # push edx
@@ -917,7 +918,7 @@ CB                    # ret
 
 #8108
 90 90 90 90 90 90 90 90
-90 90 90 90 90 90
+90 90 90 90
 
 
 #------------------------------------------------------------
@@ -1076,30 +1077,38 @@ CB                    # ret
 73 63 2F 65 78 65 63 00
 
 
+#----------------------------------------
 #:handle_syscall_execve
 
 
 #----------------------------------------
 #[8225]
 #:run
+# program name at 0x200000
+# arg1 at 0x200400
+
 CB
 
-90 90 90
-90 90 90 90
-00 00 00 00
-00 00 00 00
-00 00 00 90
+90 90
 90 90 90 90
 90 90 90 90
 90 90 90 90
 90 90 90 90
 90 90 90 90
-90 90 90
+90 90 90 90
+90 90 90 90
+90 90 90 90
+90 90 90 90
+90 90 90 90
 
+
+#----------------------------------------
 #:handle_syscall_waitpid
 
 
+#----------------------------------------
 #:handle_syscall_exit
+
 
 
 #------------------------------------------------------------
