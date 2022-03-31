@@ -807,7 +807,7 @@ CF                    # iret
 73 63 2F 6F 70 65 6E 00
 
 #[8036][04]
-# next fileno
+# next filenum
 04 00 00 00
 
 #[803A][04]
@@ -828,46 +828,44 @@ BE 2E 80 00 00        # mov esi, "sc/open"
 9A 82 7F 00 00 08 00  # call console_puts
 
 F7 C1 01 00 00 00     # test ecx, 1
-74 58                 # jz open_read
+74 59                 # jz open_read
 
 # copy filename to new slot
 89 DE                 # mov esi, ebx
 BF 00 00 40 00        # mov edi, 0x0400000
-A1 36 80 00 00        # mov eax, [&next_fileno]
+A1 36 80 00 00        # mov eax, [&next_filenum]
 C1 E0 0A              # shl eax, 0a
 01 C7                 # add edi, eax
 B9 00 04 00 00        # mov ecx, 0x0000400
 F3 A4                 # rep movsb
 
 # set address of file
-BF 04 08 01 00        # mov edi, 0x0010804
-A1 36 80 00 00        # mov eax, [&next_fileno]
+BF 00 08 01 00        # mov edi, 0x0010800       ; pfile_descriptor = &file_descriptor[0]
+A1 36 80 00 00        # mov eax, [&next_filenum]
 C1 E0 04              # shl eax, 04
-01 C7                 # add edi, eax
+01 C7                 # add edi, eax             ; pfile_descriptor += sizeof(file_descriptor) * next_filenum
 8B 0D 3A 80 00 00     # mov ecx, [0x803A]
-C7 01 00 00 00 00     # mov long [ecx], 0
+C7 01 00 00 00 00     # mov long [ecx], 0        ; *next_addr = 0  (put a zero between files, not really necessary?)
 41                    # inc ecx
-89 0D 3A 80 00 00     # mov [0x803A], ecx
-89 0F                 # mov [edi], ecx
-C7 47 04 00 00 00 00  # mov long [edi+4], 0
+89 0D 3A 80 00 00     # mov [0x803A], ecx        ; ecx = next_addr + 1
+89 4F 04              # mov [edi+4], ecx         ; *pfile_descriptor.file_addr = ecx
+C7 47 08 00 00 00 00  # mov long [edi+8], 0      ; *pfile_descriptor.length = 0
 
-A1 36 80 00 00        # mov eax, [next_fileno]
+A1 36 80 00 00        # mov eax, [next_filenum]
 40                    # inc eax
-A3 36 80 00 00        # mov [next_fileno], eax
+A3 36 80 00 00        # mov [next_filenum], eax  ; next_filenum++
 48                    # dec eax
 9A 72 7F 00 00 08 00  # call console_put_hex
 EB 16                 # jmp finish
 
 #open_read
-#find file
-#check file
-9A D0 80 00 00 08 00  # call find_file
+9A D1 80 00 00 08 00  # call find_file
 # set read offset to start of file
-BE 00 08 01 00        # mov esi, 0x0010800
+BE 00 08 01 00        # mov esi, 0x0010800       ; pfile_descriptor = &file_descriptor[0]
 C1 E2 04              # shl edx, 04
-01 D6                 # add esi, edx
+01 D6                 # add esi, edx             ; pfile_descriptor += sizeof(file_descriptor) * filenum
 31 D2                 # xor edx, edx
-89 56 0C              # mov [esi+0xC], edx       ; mov edx, current offset
+89 56 0C              # mov [esi+0xC], edx       ; current offset = 0
 
 # finish
 59                    # pop ecx
@@ -877,20 +875,20 @@ CB                    # ret
 
 
 #----------------------------------------
-#[80D0]
-#:find_file(char * ebx=file_name) returns eax=fileno
+#[80D1]
+#:find_file(char * ebx=file_name) returns eax=filenum
 51                    # push ecx
 52                    # push edx
 56                    # push esi
 57                    # push edi
 
-BA 04 00 00 00        # mov edx, 4              ; fileno = 4
+BA 04 00 00 00        # mov edx, 4              ; filenum = 4
 #check file
 89 DE                 # mov esi, ebx
-BF 00 00 40 00        # mov edi, 0x0400000      ; edi = &file_name[0]
+BF 00 00 40 00        # mov edi, 0x0400000      ; pfile_name = &file_name[0]
 89 D0                 # mov eax, edx
 C1 E0 0A              # shl eax, 0a
-01 C7                 # add edi, eax            ; edi += &file_name[fileno]
+01 C7                 # add edi, eax            ; pfile_name += sizeof(file_name) * filenum
 
 B9 00 04 00 00        # mov ecx, 0x0000400
 F3 A6                 # rep cmpsb
@@ -898,7 +896,7 @@ F3 A6                 # rep cmpsb
 
 # if not on last file, continue checking
 42                    # inc edx
-A1 36 80 00 00        # mov eax, [next_fileno]
+A1 36 80 00 00        # mov eax, [next_filenum]
 39 C2                 # cmp edx, eax
 75 DF                 # jne checkfile
 
@@ -919,7 +917,7 @@ CB                    # ret
 
 #8108
 90 90 90 90 90 90 90 90
-90 90 90 90 90 90 90
+90 90 90 90 90 90
 
 
 #------------------------------------------------------------
@@ -978,28 +976,28 @@ EB 2D                 # jmp finish
 #memfile:
 
 # get file address
-BE 00 08 01 00        # mov esi, 0x0010800     ; pfile_addr = &file_address[0]
+BE 00 08 01 00        # mov esi, 0x0010800     ; pfile_descriptor = &file_descriptor[0]
 89 D9                 # mov ecx, ebx
 C1 E1 04              # shl ecx, 04
-01 CE                 # add esi, ecx           ; pfile_addr += sizeof(file_address) * fileno
-8B 4E 04              # mov ecx, [esi+4]       ; mov ecx, [&fileaddr]
+01 CE                 # add esi, ecx           ; pfile_descriptor += sizeof(file_descriptor) * filenum
+8B 4E 04              # mov ecx, [esi+4]]      ; mov ecx, (*file_descriptor).file_address
 # get current read offset from descriptor
-8B 56 0C              # mov edx, [esi+0C]      ; mov ecx, [&fileaddr]
-FF 46 0C              # inc long [esi+0C]      ; *pcurrent_offset++
-8b 46 08              # mov eax, [esi+0x08]
+8B 56 0C              # mov edx, [esi+0C]      ; mov edx, (*file_descriptor).current_offset
+FF 46 0C              # inc long [esi+0C]      ; (*file_descriptor).current_offset++
+8b 46 08              # mov eax, [esi+0x08]    ; (*file_descriptor).file_length++
 48                    # dec eax
 39 C2                 # cmp edx, eax
-7F 0D                 # jg eof
+7F 0D                 # jg eof                 ; read_offset > file_length - 1 ?
 
-8A 04 11              # mov al, [ecx+edx]
-59                    # pop ecx
-88 01                 # mov [ecx], al
-B8 01 00 00 00        # mov eax, 1
+8A 04 11              # mov al, [ecx+edx]      ; al = *(file_address + current_offset)
+59                    # pop ecx                ; restore saved return pointer
+88 01                 # mov [ecx], al          ; *(return_pointer) = al
+B8 01 00 00 00        # mov eax, 1             ; read one byte
 EB 03                 # jmp finish
 
 #eof:
-31 C0                 # xor eax, eax
-59                    # pop ecx
+31 C0                 # xor eax, eax           ; read zero bytes
+59                    # pop ecx                ; ignore saved return pointer
 
 #finish:
 5F                    # pop edi
@@ -1042,11 +1040,11 @@ EB 2E                 # jmp finish
 #memfile
 #ebx=filenum
 # get file address
-BE 00 08 01 00        # mov esi, 0x0010800     ; pfile_addr = &file_address[0]
+BE 00 08 01 00        # mov esi, 0x0010800   ; pfile_descriptor = &file_descriptor[0]
 89 D9                 # mov ecx, ebx
 C1 E1 04              # shl ecx, 04
-01 CE                 # add esi, ecx
-8B 4E 04              # mov ecx, [esi+4]     ; mov ecx, [&fileaddr]
+01 CE                 # add esi, ecx         ; pfile_descriptor += sizeof(file_descriptor) * filenum
+8B 4E 04              # mov ecx, [esi+4]     ; mov ecx, (*file_descriptor).file_address
 # get current write offset from descriptor
 8b 56 0c              # mov edx, [esi+0xC]   ; mov edx, current offset
 ff 46 0c              # inc long [esi+0xC]   ; current_offset++
@@ -1362,7 +1360,7 @@ B8 05 00 00 00        # mov eax, 5  ; syscall_open
 B9 00 00 00 00        # mov ecx, 0x00000000
 CD 80                 # int 80
 
-50                    # push eax  ; save read fileno
+50                    # push eax  ; save read filenum
 
 90 90 90 90 90 90 90 90
 
@@ -1376,7 +1374,7 @@ CD 80                 # int 80
 
 90 90 90 90 90 90 90
 
-59                    # pop ecx                 ; restore read fileno
+59                    # pop ecx                 ; restore read filenum
 
 # this flag is set after the first digit is seen
 31 DB                 # xor ebx, ebx
