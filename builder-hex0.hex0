@@ -1036,7 +1036,7 @@ CB                    # ret
 
 # stdout -> console_out
 9A 62 7F 00 00 08 00  # call console_putc
-EB 2E                 # jmp finish
+EB 30                 # jmp finish
 
 #memfile
 #ebx=filenum
@@ -1054,8 +1054,8 @@ ff 46 08              # inc long [esi+0x8]   ; file_length++
 01 D1                 # add ecx, edx
 88 01                 # mov [ecx], al
 
-90 90 90 90
-90
+9A 72 7F 00 00 08 00  # call console_put_hex
+#90 90 90 90 90 90 90
 
 89 0D 3A 80 00 00     # mov ecx, [0x803A]
 41                    # inc ecx              ; *next_file_addr++
@@ -1072,7 +1072,7 @@ CB                    # ret
 #:handle_syscall_fork
 
 
-#[821D]
+#[821F]
 #s  c  /  e  x  e  c
 73 63 2F 65 78 65 63 00
 
@@ -1082,23 +1082,25 @@ CB                    # ret
 
 
 #----------------------------------------
-#[8225]
+#[8227]
 #:run
 # program name at 0x200000
 # arg1 at 0x200400
 
+BB 00 00 20 00        # mov ebx, 0x200000
+9A D3 80 00 00 08 00  # call find_file
+89 C2                 # mov edx, eax
+# get address of file
+BE 00 08 01 00        # mov esi, 0x0010800   ; pfile_descriptor = &file_descriptor[0]
+C1 E2 04              # shl edx, 04
+01 D6                 # add esi, edx         ; pfile_descriptor += sizeof(file_descriptor) * filenum
+8B 4E 04              # mov ecx, [esi+4]     ; mov ecx, (*file_descriptor).file_address
+
+8A 01                 # mov eax, [ecx]
+9A 72 7F 00 00 08 00  # call console_put_hex
 CB
 
-90 90
-90 90 90 90
-90 90 90 90
-90 90 90 90
-90 90 90 90
-90 90 90 90
-90 90 90 90
-90 90 90 90
-90 90 90 90
-90 90 90 90
+
 90 90 90 90
 
 
@@ -1392,7 +1394,7 @@ CD 80                 # int 80
 90 90 90 90
 90
 
-#[843E]
+#[844F]
 #:read_loop
 53                    # push ebx
 89 CB                 # mov ebx, ecx
@@ -1400,9 +1402,9 @@ CD 80                 # int 80
 5B                    # pop ebx
 
 
+#9A 72 7F 00 00 08 00  # call put_hex
+90 90 90 90 90 90 90
 90 90 90 90
-90 90 90 90
-90 90 90
 
 84 e4                 # test ah, ah
 75 04                 # jnz check_command
@@ -1426,7 +1428,7 @@ CB                    # RETF
 
 # Handle a to f
 2C 57                 # sub al, 'a'-10 == 87 = 0x57
-EB 30                 # jmp maybe_store
+EB 29                 # jmp maybe_store
 
 #:maybe_upper
 3C 46                 # cmp al, 'F'
@@ -1437,7 +1439,7 @@ EB 30                 # jmp maybe_store
 
 # Handle A to F
 2C 37                 # sub al, 'A'-10 == 55 = x37
-EB 24                 # jmp maybe_store
+EB 1D                 # jmp maybe_store
 
 #:maybe_digit
 3C 39                 # cmp al, '9'
@@ -1448,7 +1450,7 @@ EB 24                 # jmp maybe_store
 
 # Handle 0 to 9
 2C 30                 # sub al, '0' == x30
-EB 18                 # jmp maybe_store
+EB 11                 # jmp maybe_store
 
 #:skip_comment
 53                    # push ebx
@@ -1489,7 +1491,7 @@ EA 4F 84 00 00 08 00  # jmp read_loop
 #------------------------------------------------------------
 #:handle_other_command
 #[84CF]
-BE 1D 82 00 00        # mov esi, "sc/exec"
+BE 1F 82 00 00        # mov esi, "sc/exec"
 9A 82 7F 00 00 08 00  # call console_puts
 
 # clear arguments
@@ -1529,7 +1531,7 @@ BE 00 00 20 00        # mov esi, program
 BE 00 04 20 00        # mov esi, arg1
 9A 82 7F 00 00 08 00  # call console_puts
 
-9A 25 82 00 00 08 00  # call run
+9A 27 82 00 00 08 00  # call run
 CB
 
 
