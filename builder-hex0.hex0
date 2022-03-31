@@ -544,7 +544,7 @@ BD 0F FF 1F 00        # mov ebp, 0x1FFFF0
 89 EC                 # mov esp, ebp
 
 9A 73 7E 00 00 08 00  # call setup_interrupt_handlers
-9A 1A 85 00 00 08 00  # call app_main
+9A 3A 85 00 00 08 00  # call app_main
 
 
 #----------------------------------------
@@ -1455,34 +1455,69 @@ EA 3E 84 00 00 08 00  # jmp read_loop
 
 
 90 90 90 90
-90 90 90 90
-90 90 90 90
-90 90 90 90
-90 90 90 90
 90 90
 
+
+#------------------------------------------------------------
 #:handle_other_command
-#[84D4]
+#[84C4]
 BE 1D 82 00 00        # mov esi, "sc/exec"
 9A 82 7F 00 00 08 00  # call console_puts
 
-9A 62 7F 00 00 08 00  # call console_putc
+# clear arguments
+BA 00 00 20 00        # mov edx, 0x00200000
+88 02                 # mov [edx], al
+42                    # inc edx
+31 C0                 # xor eax, eax
+B9 FF 07 00 00        # mov ecx, 0x000007FF
+#zeroloop
+88 02                 # mov [edx], al
+42                    # inc edx
+49                    # dec ecx
+75 FA                 # jnz zeroloop
+
+BA 01 00 20 00        # mov edx, 0x00200001
+#get_program_name
+9A 27 82 00 00 08 00  # call read
+3C 20                 # cmp al, ' '
+74 05                 # je got_program_name
+88 02                 # mov [edx], al
+42                    # inc edx
+EB F0                 # jmp get_program_name
+
+#got_program_name
+BA 00 04 20 00        # mov edx, 0x00200400
+#get_file_name2_loop
 9A 27 82 00 00 08 00  # call read
 3C 0A                 # cmp al, '\n'
-75 EE                 # jne gather_other_command
-9A 62 7F 00 00 08 00  # call console_putc
+74 05                 # je got_filename2
+88 02                 # mov [edx], al
+42                    # inc edx
+EB F0                 # jmp get_file_name_loop
+
+BE 00 00 20 00        # mov esi,  program
+9A 82 7F 00 00 08 00  # call console_puts
+
+BE 00 04 20 00        # mov esi,  arg1
+9A 82 7F 00 00 08 00  # call console_puts
+
+# open program for read
+#BB 00 00 20 00        # mov ebx, 0x00200000
+#B8 05 00 00 00        # mov eax, 5  ; syscall_open
+#B9 00 00 00 00        # mov ecx, 0x00000000
+#CD 80                 # int 80
+
+#9A 62 7F 00 00 08 00  # call console_putc
+#9A 27 82 00 00 08 00  # call read
+#3C 0A                 # cmp al, '\n'
+#75 EE                 # jne gather_other_command
+#9A 62 7F 00 00 08 00  # call console_putc
 CB
 
-90 90 90 90
-90 90 90 90
-90 90 90 90
-90 90 90 90
-90 90 90 90
-90 90 90 90
-90 90 90 90
-90 90 90 90
+00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
-#[851A]
+#[853A]
 # ------------------------------------------------------------
 # Main Program Body
 # ------------------------------------------------------------
@@ -1524,7 +1559,7 @@ EB DB                 # jmp process_command
 
 #handle_other_command:
 #gather_other_command:
-9A D4 84 00 00 08 00  # call handle_other_command
+9A C4 84 00 00 08 00  # call handle_other_command
 EB D2                 # jmp process_command
 
 #finish_success
@@ -1547,8 +1582,6 @@ FA F4
 
 
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 #[85C0]
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
