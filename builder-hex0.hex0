@@ -780,7 +780,7 @@ CF                    # iret
 
 83 F8 04              # cmp eax, 4
 75 08                 # jne try next
-9A D6 81 00 00 08 00  # call handle_syscall_write
+9A F6 81 00 00 08 00  # call handle_syscall_write
 CF                    # iret
 
 83 F8 05              # cmp eax, 5
@@ -1017,16 +1017,34 @@ CB                    # ret
 #[81C3]
 #------------------------------------------------------------
 #:handle_syscall_brk
-BE BF 81 00 00        # mov esi,  "brk"
+BE BF 81 00 00        # mov esi, &"brk"
 9A 82 7F 00 00 08 00  # call console_puts
+A1 47 82 00 00        # mov eax, [&next_process_num]
+48                    # dec eax = current process
+
+BE 00 00 02 00        # mov esi, 0x0020000       ; pproc_descriptor = &proc_descriptor[0]
+C1 E0 04              # shl eax, 04
+01 C6                 # add esi, eax             ; pproc_descriptor += sizeof(proc_descriptor) * procnum
+
+85 DB                 # test ebx, ebx
+74 06                 # jz get
+
+# set
+89 5E 04              # mov [esi+4], ebx
+89 D8                 # mov eax, ebx
 CB
 
-90 90 90 90
-90 90
+# get
+8B 46 04              # mov eax, [esi+4]         ; pproc_descriptor->brk
+CB
+
+00 00 00 00
+00 00 00 00
+00
 
 
 #------------------------------------------------------------
-#[81D6]
+#[81F6]
 #:handle_syscall_write(ebx=file,ecx=*char_to_write)
 50                    # push eax
 51                    # push ecx
@@ -1078,16 +1096,16 @@ CB                    # ret
 #:handle_syscall_fork
 
 
-#[821F]
+#[823F]
 #s  c  /  e  x  e  c
 73 63 2F 65 78 65 63 00
 
-#[8227][04]
-# next process num
+#[8247][04]
+# next_process_num
 01 00 00 00
 
-#[822B][04]
-# next process address
+#[824B][04]
+# next_process_address
 00 00 80 00
 
 #----------------------------------------
@@ -1095,7 +1113,7 @@ CB                    # ret
 
 
 #----------------------------------------
-#[822F]
+#[824F]
 #:run
 # program name at 0x200000
 # arg1 at 0x200400
@@ -1113,11 +1131,11 @@ C1 E0 04              # shl eax, 04
 8B 72 04              # mov esi, [edx+0x4]       ; esi = pfile_descriptor->file_address
 
 # get proc entry point from file image
-8B 46 3C              # mov eax, [esi + 0x18]    ; get declared process address
+8B 46 3C              # mov eax, [esi + 0x3C]    ; get declared process address
 25 FF FF 00 00        # and eax, 0x0000FFFF      ; mask off high bits to get local addr
 
-# calc process entry point
-8B 3D 2B 82 00 00     # mov edi, [&next_process_address]
+# calc process image beginning
+8B 3D 4B 82 00 00     # mov edi, [&next_process_address]
 09 C7                 # or edi, eax              ; use low bits from declared entry point
 
 51                    # push ecx
@@ -1128,17 +1146,21 @@ F3 A4                 # rep movsb
 
 # record process in proc descriptor
 BE 00 00 02 00        # mov esi, 0x0020000       ; pproc_descriptor = &proc_descriptor[0]
-A1 27 82 00 00        # mov eax, [&next_process]
+A1 47 82 00 00        # mov eax, [&next_process_num]
 C1 E0 04              # shl eax, 04
 01 C6                 # add esi, eax             ; pproc_descriptor += sizeof(proc_descriptor) * procnum
-89 3E                 # mov [esi], edi
+89 3E                 # mov [esi], edi           ; pproc_descriptor->address = edi
+57                    # push edi
+01 CF                 # add edi, ecx             ; set brk after code
+89 7E 04              # mov [esi+4], edi         ; pproc_descriptor->brk
+5F                    # pop edi
 
 # prepare for next process
 40                    # inc eax
-A3 27 82 00 00        # mov [next_process], eax
+A3 47 82 00 00        # mov [next_process_num], eax
 57                    # push edi
 81 C7 00 00 10 00     # add edi, 0x100000
-89 3D 00 00 00 00     # mov [&next_process_address], edi
+89 3D 4B 82 00 00     # mov [&next_process_address], edi
 5F                    # pop edi
 
 # patch locations
@@ -1174,16 +1196,7 @@ C1 EB 10              # shr ebx, 16              ; mov high bytes to bx
 FF E0                 # jmp eax
 CB                    # ret
 
-00 00 00 00
-00 00 00 00
-00 00 00 00
-00 00 00 00
-00 00 00 00
-00 00 00 00
-00 00 00 00
-00 00 00 00
-00 00 00 00
-00 00 00
+
 
 #----------------------------------------
 #:handle_syscall_waitpid
@@ -1558,7 +1571,7 @@ EA CF 84 00 00 08 00  # jmp read_loop
 #------------------------------------------------------------
 #:handle_other_command
 #[854F]
-BE 1F 82 00 00        # mov esi, "sc/exec"
+BE 3F 82 00 00        # mov esi, "sc/exec"
 9A 82 7F 00 00 08 00  # call console_puts
 
 # clear arguments
@@ -1598,7 +1611,7 @@ BE 00 00 20 00        # mov esi, program
 BE 00 04 20 00        # mov esi, arg1
 9A 82 7F 00 00 08 00  # call console_puts
 
-9A 2F 82 00 00 08 00  # call run
+9A 4F 82 00 00 08 00  # call run
 CB
 
 
