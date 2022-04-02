@@ -182,6 +182,10 @@ character
 * https://dev.to/frosnerd/writing-my-own-boot-loader-3mld (disk read error handling)
 * https://stackoverflow.com/questions/9057670/how-to-write-on-hard-disk-with-bios-interrupt-13h (CHS calculations for int 13)
 
+** OS Development
+https://wiki.osdev.org/Main_Page
+http://asm.sourceforge.net/articles/startup.html (initial stack structure for executables)
+
 ### Tools
 * https://github.com/copy/v86
 * https://justine.lol/blinkenlights
