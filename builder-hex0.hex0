@@ -562,7 +562,7 @@ C6 43 05 8E           # mov byte [ebx + 5], flags = 8E
 
 # handle int 80
 BB 00 04 01 00        # mov ebx, &interrupt_table[80]
-66 C7 03 C6 7F        # mov word [ebx + 0], low_address syscall_interrupt_handler
+66 C7 03 C8 7F        # mov word [ebx + 0], low_address syscall_interrupt_handler
 66 C7 43 06 00 00     # mov word [ebx + 6], high_address
 66 C7 43 02 08 00     # mov word [ebx + 2], code_segment = 0x0800
 C6 43 05 8E           # mov byte [ebx + 5], flags = 8E
@@ -717,6 +717,7 @@ CB              # RETF
 #:console_puts (ds:si = string)
 #:puts_loop
 50                    # push eax
+56                    # push esi
 8A 06                 # mov al, [esi]
 3C 00                 # cmp al, 0
 74 0A                 # jz end_loop
@@ -726,11 +727,12 @@ EB F0                 # jmp puts_loop
 #:end_loop
 B0 0A                 # mov al, 0A
 9A 62 7F 00 00 08 00  # call console_putc
+5E                    # pop esi
 58                    # pop eax
 CB                    # RETF
 
 
-#[7F9E][18]
+#[7FA0][18]
 # ------------------------
 #:get_partition_start(eax=partition_num 1..4)
 #returns:
@@ -752,16 +754,16 @@ CB              # retf
 
 
 # ------------------------
-#[7FB6][10]
+#[7FB8][10]
 #:read_sectors(di = *dest_addr, cx=cylinder/sector, dh = head, ax=num_sectors)
-E8 FF FE FF FF  # CALL enter_16bit_real, next=[7FBB]
+E8 FD FE FF FF  # CALL enter_16bit_real, next=[7FBD]
 9A 1F 7D 00 00  # CALL read_sectors_16
 9A 1B 7F 00 00  # CALL resume_32bit_mode
 CB              # RETF
 
 
 # ------------------------
-#[7FC6][29]
+#[7FC8][29]
 #:syscall_interrupt_handler
 83 F8 01              # cmp eax, 1
 75 08                 # jne try next
@@ -785,7 +787,7 @@ CF                    # iret
 
 83 F8 05              # cmp eax, 5
 75 08                 # jne try next
-9A 3E 80 00 00 08 00  # call handle_syscall_open
+9A 40 80 00 00 08 00  # call handle_syscall_open
 CF                    # iret
 
 83 F8 07              # cmp eax, 7
@@ -803,26 +805,27 @@ CF                    # iret
 9A C3 81 00 00 08 00  # call handle_syscall_brk
 CF                    # iret
 
-#[802E][08]
+
+#[8030][08]
 #s  c  /  o  p  e  n \0
 73 63 2F 6F 70 65 6E 00
 
-#[8036][04]
+#[8038][04]
 # next_filenum
 04 00 00 00
 
-#[803A][04]
+#[803C][04]
 # next_file_address
 00 00 50 00
 
 #------------------------------------------------------------
-#[803E][20]
+#[8040][20]
 #:handle_syscall_open(ebx=filename, ecx=flags)
 56                    # push esi
 57                    # push edi
 51                    # push ecx
 
-BE 2E 80 00 00        # mov esi, "sc/open"
+BE 30 80 00 00        # mov esi, "sc/open"
 9A 82 7F 00 00 08 00  # call console_puts
 
 89 DE                 # mov esi, ebx
@@ -834,7 +837,7 @@ F7 C1 01 00 00 00     # test ecx, 1
 # copy filename to new slot
 89 DE                 # mov esi, ebx
 BF 00 00 40 00        # mov edi, 0x0400000
-A1 36 80 00 00        # mov eax, [&next_filenum]
+A1 38 80 00 00        # mov eax, [&next_filenum]
 C1 E0 0A              # shl eax, 0a
 01 C7                 # add edi, eax
 B9 00 04 00 00        # mov ecx, 0x0000400
@@ -842,25 +845,25 @@ F3 A4                 # rep movsb
 
 # set address of file
 BF 00 08 01 00        # mov edi, 0x0010800            ; pfile_descriptor = &file_descriptor[0]
-A1 36 80 00 00        # mov eax, [&next_filenum]
+A1 38 80 00 00        # mov eax, [&next_filenum]
 C1 E0 04              # shl eax, 04
 01 C7                 # add edi, eax                  ; pfile_descriptor += sizeof(file_descriptor) * next_filenum
-8B 0D 3A 80 00 00     # mov ecx, [next_file_address]
+8B 0D 3C 80 00 00     # mov ecx, [next_file_address]
 C7 01 00 00 00 00     # mov long [ecx], 0             ; *next_addr = 0  (put a zero between files, not really necessary?)
 41                    # inc ecx
-89 0D 3A 80 00 00     # mov [next_file_address], ecx  ; next_file_addr++
+89 0D 3C 80 00 00     # mov [next_file_address], ecx  ; next_file_addr++
 89 4F 04              # mov [edi+4], ecx              ; pfile_descriptor->file_addr = ecx
 C7 47 08 00 00 00 00  # mov long [edi+8], 0           ; pfile_descriptor->length = 0
 
-A1 36 80 00 00        # mov eax, [next_filenum]
+A1 38 80 00 00        # mov eax, [next_filenum]
 40                    # inc eax
-A3 36 80 00 00        # mov [next_filenum], eax  ; next_filenum++
+A3 38 80 00 00        # mov [next_filenum], eax  ; next_filenum++
 48                    # dec eax
 9A 72 7F 00 00 08 00  # call console_put_hex
 EB 18                 # jmp finish
 
 #open_read
-9A D3 80 00 00 08 00  # call find_file
+9A D5 80 00 00 08 00  # call find_file
 89 C2                 # mov edx, eax
 # set read offset to start of file
 BE 00 08 01 00        # mov esi, 0x0010800       ; pfile_descriptor = &file_descriptor[0]
@@ -877,7 +880,7 @@ CB                    # ret
 
 
 #----------------------------------------
-#[80D3]
+#[80D5]
 #:find_file(char * ebx=file_name) returns eax=filenum
 51                    # push ecx
 52                    # push edx
@@ -898,7 +901,7 @@ F3 A6                 # rep cmpsb
 
 # if not on last file, continue checking
 42                    # inc edx
-A1 36 80 00 00        # mov eax, [next_filenum]
+A1 38 80 00 00        # mov eax, [next_filenum]
 39 C2                 # cmp edx, eax
 75 DF                 # jne checkfile
 
@@ -917,9 +920,8 @@ EB 02                 # jmp finish
 CB                    # ret
 
 
-#8108
 90 90 90 90 90 90 90 90
-90 90 90 90
+90 90
 
 
 #------------------------------------------------------------
@@ -952,7 +954,7 @@ EB 2A                 # jmp getchar
 #read next sector
 BF 00 A0 00 00        # mov edi, 0x000A000
 B8 01 00 00 00        # mov eax, 0x0001   ; num_sectors = 1
-9A B6 7F 00 00 08 00  # call read_sectors
+9A B8 7F 00 00 08 00  # call read_sectors
 
 # save new location and offset
 66 89 0D 00 08 01 00  # mov [0x10800], cx
@@ -1081,9 +1083,9 @@ ff 46 08              # inc long [esi+0x8]   ; file_length++
 #9A 72 7F 00 00 08 00  # call console_put_hex
 90 90 90 90 90 90 90
 
-89 0D 3A 80 00 00     # mov ecx, [0x803A]
+89 0D 3C 80 00 00     # mov ecx, [0x803C]    ; next_file_address
 41                    # inc ecx              ; *next_file_addr++
-89 0D 3A 80 00 00     # mov [0x803A], ecx
+89 0D 3C 80 00 00     # mov [0x803C], ecx
 
 #finish
 5E                    # pop esi
@@ -1145,7 +1147,7 @@ CB                    # ret
 # program name at [esp+C]
 # arg1 at [esp+0xc]
 8B 5C 24 0C           # mov ebx, [esp + 0xC]
-9A D3 80 00 00 08 00  # call find_file
+9A D5 80 00 00 08 00  # call find_file
 9A 72 7F 00 00 08 00  # call put_hex
 
 # get file address and length
@@ -1680,7 +1682,7 @@ CB
 #:app_main (dl=boot_drive)
 # Set up /dev/hda4 as global stdin
 B8 04 00 00 00        # mov eax, 4
-9A 9E 7F 00 00 08 00  # call get_partition_start(4)
+9A A0 7F 00 00 08 00  # call get_partition_start(4)
 
 # save disk location and byte offset to descriptor
 66 89 0D 00 08 01 00  # mov [0x10800], cx
