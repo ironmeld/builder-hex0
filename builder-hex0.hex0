@@ -890,13 +890,14 @@ CB                    # ret
 BA 04 00 00 00        # mov edx, 4              ; filenum = 4
 #check file
 89 DE                 # mov esi, ebx
+#9A 82 7F 00 00 08 00  # call console_puts
+90 90 90 90 90 90 90
 BF 00 00 40 00        # mov edi, 0x0400000      ; pfile_name = &file_name[0]
 89 D0                 # mov eax, edx
 C1 E0 0A              # shl eax, 0a
 01 C7                 # add edi, eax            ; pfile_name += sizeof(file_name) * filenum
 
-B9 00 04 00 00        # mov ecx, 0x0000400
-F3 A6                 # rep cmpsb
+9A 91 83 00 00 08 00  # call strcmp
 74 11                 # je match
 
 # if not on last file, continue checking
@@ -920,8 +921,7 @@ EB 02                 # jmp finish
 CB                    # ret
 
 
-90 90 90 90 90 90 90 90
-90 90
+90 90 90
 
 
 #------------------------------------------------------------
@@ -1108,8 +1108,7 @@ BE 00 00 02 00        # mov esi, 0x0020000       ; pproc_descriptor = &proc_desc
 C1 E0 04              # shl eax, 04
 01 C6                 # add esi, eax             ; pproc_descriptor += sizeof(proc_descriptor) * procnum
 89 66 08              # mov [esi+0x8], esp       ; save stack pointer so we can return again later
-#31 C0                 # xor eax, eax             ; return as child
-90 90
+31 C0                 # xor eax, eax             ; return as child
 CB                    # ret
 
 00 00 00 00 00 00 00 00 00
@@ -1132,20 +1131,48 @@ CB                    # ret
 #:handle_syscall_execve
 BE 6F 82 00 00        # mov esi, "exec"
 9A 82 7F 00 00 08 00  # call console_puts
+6A 00                 # push 0
+
+# count args
+31 C0                 # xor eax, eax       ; passed_args = 0
+# countloop
+83 39 00              # cmp long [ecx], 0
+74 06                 # jz pushloop
+40                    # inc eax
+83 C1 04              # add ecx, 4
+EB F5                 # jmp countloop
+
+9A 72 7F 00 00 08 00  # call put_hex
+
+# push args in reverse
+89 C2                 # mov edx, eax
+#pushloop
+83 E9 04              # sub ecx, 4
+FF 31                 # push long [ecx]
+
+8B 31                 # mov esi, [ecx]
+9A 82 7F 00 00 08 00  # call console_puts
+
+48                    # dec eax
+75 EF                 # jnz pushloop
+89 D0                 # mov eax, edx
+
+#finish
+50                    # push eax = argc
+9A C0 82 00 00 08 00  # call run
+
 CB                    # ret
 
 
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00
+00
 
 
 #----------------------------------------
-#[82B0]
+#[82C0]
 #:run
 # argc at [esp+8]
 # program name at [esp+C]
-# arg1 at [esp+0xc]
+# arg1 at [esp+0x10]
 8B 5C 24 0C           # mov ebx, [esp + 0xC]
 9A D5 80 00 00 08 00  # call find_file
 9A 72 7F 00 00 08 00  # call put_hex
@@ -1156,7 +1183,8 @@ C1 E0 04              # shl eax, 04
 01 C2                 # add edx, eax             ; pfile_descriptor += sizeof(file_descriptor) * filenum
 8B 4A 08              # mov ecx, [edx+0x8]       ; ecx = pfile_descriptor->file_length
 89 C8                 # mov eax, ecx
-9A 72 7F 00 00 08 00  # call put_hex
+
+90 90 90 90 90 90 90
 8B 72 04              # mov esi, [edx+0x4]       ; esi = pfile_descriptor->file_address
 
 # get proc entry point from file image
@@ -1223,11 +1251,7 @@ C1 EB 10              # shr ebx, 16              ; mov high bytes to bx
 FF E0                 # jmp eax
 CB                    # ret
 
-90 90
-90 90
-90 90 90 90 90
-90 90 90 90 90
-90 90 90 90 90
+90 90 90
 
 
 #----------------------
@@ -1254,15 +1278,41 @@ CB                    # ret
 BE 78 83 00 00        # mov esi, "exit"
 9A 82 7F 00 00 08 00  # call console_puts
 CB                    # ret
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00
 
+
+00 00 00 00 00 00 00
+90 90 90 90 90 90 90
 
 
 # ------------------------------------------------------------
 # Utilities
 # ------------------------------------------------------------
+
+#:strcmp(esi, edi) returns zf
+#[8391]
+50                    # push eax
+53                    # push ebx
+56                    # push esi
+57                    # push edi
+
+#check_byte
+8A 06                 # mov al, [esi]
+8A 1F                 # mov bl, [edi]
+38 D8                 # cmp al, bl
+75 0A                 # jne finish
+46                    # inc esi
+47                    # inc edi
+84 C0                 # test al, al
+75 F2                 # jnz check_byte
+84 DB                 # test bl, bl
+75 EE                 # jnz check_byte
+
+#finish
+5F                    # pop edi
+5E                    # pop esi
+5B                    # pop ebx
+58                    # pop eax
+CB                    # ret
 
 
 # ----------------------------------------
@@ -1670,7 +1720,7 @@ BE 00 04 20 00        # mov esi, arg1
 68 00 00 20 00        # push arg0=program_name
 68 02 00 00 00        # push argc=2
 
-9A B0 82 00 00 08 00  # call run
+9A C0 82 00 00 08 00  # call run
 CB
 
 00 00 00 00 00 00 00 00 00 00 00 00 00
