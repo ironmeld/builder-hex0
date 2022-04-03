@@ -545,7 +545,7 @@ BD 0F FF 1F 00        # mov ebp, 0x1FFFF0
 89 EC                 # mov esp, ebp
 
 9A 73 7E 00 00 08 00  # call setup_interrupt_handlers
-9A 7A 86 00 00 08 00  # call app_main
+9A 9A 86 00 00 08 00  # call app_main
 
 
 #----------------------------------------
@@ -790,7 +790,7 @@ CF                    # iret
 
 83 F8 07              # cmp eax, 7
 75 08                 # jne try next
-9A 3B 83 00 00 08 00  # call handle_syscall_waitpid
+9A 5B 83 00 00 08 00  # call handle_syscall_waitpid
 CF                    # iret
 
 83 F8 0B              # cmp eax, B
@@ -1100,10 +1100,17 @@ CB                    # ret
 #:handle_syscall_fork
 BE 3F 82 00 00        # mov esi, "fork"
 9A 82 7F 00 00 08 00  # call console_puts
+A1 77 82 00 00        # mov eax, [&next_process_num]
+48                    # dec eax = current process
+BE 00 00 02 00        # mov esi, 0x0020000       ; pproc_descriptor = &proc_descriptor[0]
+C1 E0 04              # shl eax, 04
+01 C6                 # add esi, eax             ; pproc_descriptor += sizeof(proc_descriptor) * procnum
+89 66 08              # mov [esi+0x8], esp       ; save stack pointer so we can return again later
+#31 C0                 # xor eax, eax             ; return as child
+90 90
 CB                    # ret
 
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00
 
 
 #[826F]
@@ -1124,15 +1131,20 @@ CB                    # ret
 BE 6F 82 00 00        # mov esi, "exec"
 9A 82 7F 00 00 08 00  # call console_puts
 CB                    # ret
-00 00 00
+
+
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00
 
 
 #----------------------------------------
-#[828F]
+#[82B0]
 #:run
-# program name at 0x200000
-# arg1 at 0x200400
-BB 00 00 20 00        # mov ebx, 0x200000
+# argc at [esp+8]
+# program name at [esp+C]
+# arg1 at [esp+0xc]
+8B 5C 24 0C           # mov ebx, [esp + 0xC]
 9A D3 80 00 00 08 00  # call find_file
 9A 72 7F 00 00 08 00  # call put_hex
 
@@ -1201,32 +1213,33 @@ C1 EB 10              # shr ebx, 16              ; mov high bytes to bx
 
 # get entry point
 8B 47 18              # mov eax, [edi+ 0x18]
-6A 00                 # push 0             ; null environment
-6A 00                 # push 0             ; end args
-68 00 04 20 00        # push arg1
-68 00 00 20 00        # push arg0=program_name
-68 02 00 00 00        # push argc=2
+
 ## save return point TODO
-8B 18                 # mov ebx, [eax]
+5B                    # pop ebx             ; remove my return eip
+5B                    # pop ebx             ; remove my return cs
+
 FF E0                 # jmp eax
 CB                    # ret
 
+90 90
+90 90
+90 90 90 90 90
+90 90 90 90 90
+90 90 90 90 90
 
 
-#[8333][08]
+#----------------------
+#[8353][08]
 #w  a  i  t  p  i  d \0
 77 61 69 74 70 69 64 00
 
 #----------------------------------------
 #:handle_syscall_waitpid
-#[833B]
-BE 33 83 00 00        # mov esi, "waitpid"
+#[835B]
+BE 53 83 00 00        # mov esi, "waitpid"
 9A 82 7F 00 00 08 00  # call console_puts
 CB                    # ret
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
 
 
 #[8378]
@@ -1649,11 +1662,18 @@ BE 00 00 20 00        # mov esi, program
 BE 00 04 20 00        # mov esi, arg1
 9A 82 7F 00 00 08 00  # call console_puts
 
-9A 8F 82 00 00 08 00  # call run
+6A 00                 # push 0             ; null environment
+6A 00                 # push 0             ; end args
+68 00 04 20 00        # push arg1
+68 00 00 20 00        # push arg0=program_name
+68 02 00 00 00        # push argc=2
+
+9A B0 82 00 00 08 00  # call run
 CB
 
+00 00 00 00 00 00 00 00 00 00 00 00 00
 
-#[867A]
+#[869A]
 # ------------------------------------------------------------
 # Main Program Body
 # ------------------------------------------------------------
@@ -1718,9 +1738,6 @@ FA F4
 
 
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-#[8700]
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 #[8740]
