@@ -808,7 +808,7 @@ CF                    # iret
 
 83 F8 0B              # cmp eax, B
 75 08                 # jne try next
-9A 9E 82 00 00 08 00  # call handle_syscall_execve
+9A 9B 82 00 00 08 00  # call handle_syscall_execve
 CF                    # iret
 
 83 F8 13              # cmp eax, 0x13
@@ -1770,7 +1770,7 @@ EA FF 85 00 00 08 00  # jmp read_loop
 #------------------------------------------------------------
 #:handle_other_command
 #[868B]
-BE 8E 82 00 00        # mov esi, "sc/exec"
+BE 8B 82 00 00        # mov esi, "sc/exec"
 9A 82 7F 00 00 08 00  # call console_puts
 
 # clear arguments
