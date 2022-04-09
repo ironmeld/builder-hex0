@@ -1,4 +1,3 @@
-#
 # Builder-Hex0 is a small bootable machine image which has
 # the ability to compile hex0 code. It is also written in hex0
 # and so it can build itself if provided with its own source code.
@@ -302,7 +301,7 @@ FE C1           # inc cl              ; else sector_num++;
 EB 28           # jmp cleanup
 
 #next_head:
-3A 36 14 7C     # cmp dh, [0x7C14]    ; if head_num == num_heads
+3A 36 14 7C     # cmp dh, [0x7C14]    ; if head_num == max_head
 74 09           # jz next_cylinder    ;      goto next_cyclinder
 FE C6           # inc dh              ; else head_num++
 80 E1 C0        # and cl, 0xc0        ;      sector_num = 1
@@ -311,7 +310,7 @@ EB 19           # jmp cleanup
 
 #next_cylinder:
 80 FD FF        # cmp ch, 0xff        ; if cylinder_low == 255
-75 0B           # jnz next_cyl_high
+74 0B           # je next_cyl_high
 
 #next_cyl_low:
 30 F6           # xor dh, dh          ; head_num = 0
@@ -675,7 +674,6 @@ FF FF
 #----------------------------------------
 #[7F1B][40]
 #:resume_32bit_mode()
-# modifies: ebp and all segment registers
 FA                    # cli
 A3 08 7B              # mov [0x7B08], ax  ; preserve, they might be return values from 16 bit
 89 16 14 7b           # mov [0x7B14], dx
@@ -785,12 +783,12 @@ CF                    # iret
 
 83 F8 02              # cmp eax, 2
 75 08                 # jne try next
-9A 51 82 00 00 08 00  # call handle_syscall_fork
+9A 59 82 00 00 08 00  # call handle_syscall_fork
 CF                    # iret
 
 83 F8 03              # cmp eax, 3
 75 08                 # jne try next
-9A 24 81 00 00 08 00  # call handle_syscall_read
+9A 1A 81 00 00 08 00  # call handle_syscall_read
 CF                    # iret
 
 83 F8 04              # cmp eax, 4
@@ -810,17 +808,17 @@ CF                    # iret
 
 83 F8 0B              # cmp eax, B
 75 08                 # jne try next
-9A 96 82 00 00 08 00  # call handle_syscall_execve
+9A 9E 82 00 00 08 00  # call handle_syscall_execve
 CF                    # iret
 
 83 F8 13              # cmp eax, 0x13
 75 08                 # jne try next
-9A D2 83 00 00 08 00  # call handle_syscall_lseek
+9A D8 83 00 00 08 00  # call handle_syscall_lseek
 CF                    # iret
 
 83 F8 2D              # cmp eax, 2D
 75 08                 # jne try next
-9A D0 81 00 00 08 00  # call handle_syscall_brk
+9A D5 81 00 00 08 00  # call handle_syscall_brk
 CF                    # iret
 
 
@@ -881,13 +879,13 @@ EB 18                 # jmp finish
 
 #open_read
 9A E2 80 00 00 08 00  # call find_file
-89 C2                 # mov edx, eax
+89 C1                 # mov ecx, eax
 # set read offset to start of file
 BE 00 08 01 00        # mov esi, 0x0010800       ; pfile_descriptor = &file_descriptor[0]
-C1 E2 04              # shl edx, 04
-01 D6                 # add esi, edx             ; pfile_descriptor += sizeof(file_descriptor) * filenum
-31 D2                 # xor edx, edx
-89 56 0C              # mov [esi+0xC], edx       ; current offset = 0
+C1 E1 04              # shl ecx, 04
+01 CE                 # add esi, ecx             ; pfile_descriptor += sizeof(file_descriptor) * filenum
+31 C9                 # xor ecx, ecx
+89 4E 0C              # mov [esi+0xC], ecx       ; current offset = 0
 
 # finish
 9A 72 7F 00 00 08 00  # call console_put_hex
@@ -908,8 +906,7 @@ CB                    # ret
 BA 04 00 00 00        # mov edx, 4              ; filenum = 4
 #check file
 89 DE                 # mov esi, ebx
-#9A 82 7F 00 00 08 00  # call console_puts
-90 90 90 90 90 90 90
+
 BF 00 00 40 00        # mov edi, 0x0400000      ; pfile_name = &file_name[0]
 89 D0                 # mov eax, edx
 C1 E0 0A              # shl eax, 0a
@@ -939,12 +936,9 @@ EB 02                 # jmp finish
 CB                    # ret
 
 
-90 90 90
-
-
 #------------------------------------------------------------
-#[8124][70]
-#:handle_syscall_read(ecx=*return_char, ebx=file)
+#[811A][70]
+#:handle_syscall_read(ecx=*return_char, ebx=file, edx=length)
 53                    # push ebx
 51                    # push ecx
 52                    # push edx
@@ -993,33 +987,50 @@ BB 00 00 04 00        # mov ebx, 0x40000    ; device buffer
 8A 04 33              # mov al, [ebx+esi+0]
 88 01                 # mov [ecx], al
 B8 01 00 00 00        # mov eax, 1
-EB 2D                 # jmp finish
+EB 3C                 # jmp finish
 
 #memfile:
 
-# get file address
+# get descriptor address
 BE 00 08 01 00        # mov esi, 0x0010800     ; pfile_descriptor = &file_descriptor[0]
 89 D9                 # mov ecx, ebx
 C1 E1 04              # shl ecx, 04
 01 CE                 # add esi, ecx           ; pfile_descriptor += sizeof(file_descriptor) * filenum
-8B 4E 04              # mov ecx, [esi+4]       ; mov ecx, pfile_descriptor->file_address
-# get current read offset from descriptor
-8B 56 0C              # mov edx, [esi+0C]      ; mov edx, pfile_descriptor->current_offset
-FF 46 0C              # inc long [esi+0C]      ; pfile_descriptor->current_offset++
-8b 46 08              # mov eax, [esi+0x08]    ; pfile_descriptor->file_length
-48                    # dec eax
-39 C2                 # cmp edx, eax
-7F 0D                 # jg eof                 ; read_offset > file_length - 1 ?
 
-8A 04 11              # mov al, [ecx+edx]      ; al = *(file_address + current_offset)
-59                    # pop ecx                ; restore saved return pointer
-88 01                 # mov [ecx], al          ; *(return_pointer) = al
-B8 01 00 00 00        # mov eax, 1             ; read one byte
-EB 03                 # jmp finish
 
-#eof:
-31 C0                 # xor eax, eax           ; read zero bytes
-59                    # pop ecx                ; ignore saved return pointer
+# prepare to read
+31 C0                 # xor eax, eax            ; bytes_read = 0
+5F                    # pop edi                 ; edi = p_dst
+8B 5E 04              # mov ebx, [esi+4]        ; ebx = pfile_descriptor->file_address
+89 D9                 # mov ecx, ebx            ;
+03 4E 08              # add ecx, [esi+0x08]     ; ecx = file_address + length
+49                    # dec ecx                 ; ecx = last address to read
+03 5E 0C              # add ebx, [esi+0xC]      ; ebx = file_addr + current_offset
+87 F3                 # xchg esi, ebx           ; esi = p_src
+
+# read_loop
+39 CE                 # cmp esi, ecx            ; past the end?
+7F 1B                 # jg finish
+
+# Debug: examine the reads from a specific file
+#81 fb 80 09 01 00     # cmp ebx, 0x10840
+#75 0B                 # jne skip
+#50                    # push eax
+##8B 06                 # mov eax, [esi]
+#9A 62 7F 00 00 08 00  # call console_putc
+#58                    # pop eax
+90 90 90 90 90 90
+90 90
+90
+90 90
+90 90 90 90 90 90 90
+90
+
+A4                    # movsb
+40                    # inc eax                 ; bytes_read++
+FF 43 0C              # inc long [ebx+0xC]      ; pfile_descriptor->current_offset++
+4A                    # dec edx
+75 E1                 # jnz read_loop
 
 #finish:
 5F                    # pop edi
@@ -1030,17 +1041,18 @@ EB 03                 # jmp finish
 CB                    # ret
 
 
-#[81CC]
+#[81D1]
 #b  r  k
 62 72 6b 00
 
-#[81D0]
+#[81D5]
 #------------------------------------------------------------
 #:handle_syscall_brk
 56                    # push esi
-BE CC 81 00 00        # mov esi, &"brk"
+BE D1 81 00 00        # mov esi, &"brk"
 9A 82 7F 00 00 08 00  # call console_puts
-A1 8E 82 00 00        # mov eax, [&next_process_num]
+
+A1 93 82 00 00        # mov eax, [&next_process_num]
 48                    # dec eax = current process
 
 BE 00 00 02 00        # mov esi, 0x0020000       ; pproc_descriptor = &proc_descriptor[0]
@@ -1061,73 +1073,82 @@ CB                    # ret
 5E                    # pop esi
 CB                    # ret
 
-00 00 00 00
-00 00
+00
 
 
 #------------------------------------------------------------
 #[8203]
 #:handle_syscall_write(ebx=file,ecx=*char_to_write)
-50                    # push eax
 51                    # push ecx
 52                    # push edx
 56                    # push esi
-
-# get char to write
-8A 01                 # mov al, [ecx]
+57                    # push edi
 
 # stdout?
 83 FB 01              # cmp ebx, 01
-75 09                 # jnz memfile
+75 0B                 # jnz memfile
 
 # stdout -> console_out
+8A 01                 # mov al, [ecx]
 9A 62 7F 00 00 08 00  # call console_putc
-EB 30                 # jmp finish
+EB 38                 # jmp finish
 
-#memfile
-#ebx=filenum
-# get file address
-BE 00 08 01 00        # mov esi, 0x0010800   ; pfile_descriptor = &file_descriptor[0]
-89 D9                 # mov ecx, ebx
-C1 E1 04              # shl ecx, 04
-01 CE                 # add esi, ecx         ; pfile_descriptor += sizeof(file_descriptor) * filenum
-8B 4E 04              # mov ecx, [esi+4]     ; mov ecx, pfile_descriptor->file_address
-# get current write offset from descriptor
-8b 56 0c              # mov edx, [esi+0xC]   ; mov edx, current offset
-ff 46 0c              # inc long [esi+0xC]   ; current_offset++
-ff 46 08              # inc long [esi+0x8]   ; file_length++
+#:memfile
+C1 E3 04              # shl ebx, 04
+81 C3 00 08 01 00     # add ebx, 0x010800       ; pfile_descriptor += sizeof(file_descriptor) * filenum
+# prepare to write
+89 CE                 # mov esi, ecx
+8b 7b 04              # mov edi, [ebx+4]        ; ebx = pfile_descriptor->file_address
+03 7B 0C              # add edi, [ebx+0xC]      ; ebx = file_addr + current_offset
+31 C0                 # xor eax, eax            ; bytes_written = 0
+#write_loop
 
-01 D1                 # add ecx, edx
-88 01                 # mov [ecx], al
-
+# Debug: examine the writes to a specific file
+#81 fb 80 09 01 00     # cmp ebx, 0x10840
+#75 0B
+#50                    # push eax
+#8B 06                 # mov eax, [esi]
 #9A 72 7F 00 00 08 00  # call console_put_hex
+#58                    # pop eax
+90 90 90 90 90 90
+90 90
+90
+90 90
 90 90 90 90 90 90 90
+90
 
-89 0D 49 80 00 00     # mov ecx, [0x8049]    ; next_file_address
-41                    # inc ecx              ; *next_file_addr++
-89 0D 49 80 00 00     # mov [0x8049], ecx
+A4                    # movsb
+FF 43 0C              # inc long [ebx+0xC]   ; current_offset++
+FF 43 08              # inc long [ebx+0x8]   ; file_length++
+FF 05 49 80 00 00     # inc long [next_file_addr]
+40                    # inc eax              ; num_written++
+4A                    # dec edx
+75 DC                 # jnz write_loop
+
+90
 
 #finish
+5F                    # pop edi
 5E                    # pop esi
 5A                    # pop edx
 59                    # pop ecx
-58                    # pop eax
 CB                    # ret
 
-#[824C]
+
+#[8254]
 #f  o  r  k
 66 6F 72 6B 00
 
-#[8251]
+#[8259]
 #:handle_syscall_fork
 56                    # push esi
 57                    # push edi
 
-BE 4C 82 00 00        # mov esi, "fork"
+BE 54 82 00 00        # mov esi, "fork"
 9A 82 7F 00 00 08 00  # call console_puts
 
 
-A1 8E 82 00 00        # mov eax, [&next_process_num]
+A1 93 82 00 00        # mov eax, [&next_process_num]
 48                    # dec eax = current process
 BF 00 00 02 00        # mov edi, 0x0020000       ; pproc_descriptor = &proc_descriptor[0]
 C1 E0 08              # shl eax, 08
@@ -1146,28 +1167,26 @@ F3 A5                 # rep movsd                ; save stack
 CB                    # ret
 
 
-90 90 90
-
-#[8286]
+#[828B]
 #s  c  /  e  x  e  c
 73 63 2F 65 78 65 63 00
 
-#[828E][04]
+#[8293][04]
 # next_process_num
 01 00 00 00
 
-#[8292][04]
+#[8297][04]
 # next_process_address
 00 00 80 00
 
 #----------------------------------------
-#[8296]
+#[829B]
 #:handle_syscall_execve (ebx = program_name, ecx = char **args, edx=env)
-BE 86 82 00 00        # mov esi, "sc/exec"
+BE 8B 82 00 00        # mov esi, "sc/exec"
 9A 82 7F 00 00 08 00  # call console_puts
 
 BE 00 00 02 00        # mov esi, 0x0020000       ; pproc_descriptor = &proc_descriptor[0]
-A1 8E 82 00 00        # mov eax, [&next_process_num]
+A1 93 82 00 00        # mov eax, [&next_process_num]
 9A 72 7F 00 00 08 00  # call console_put_hex
 C1 E0 08              # shl eax, 08
 01 C6                 # add esi, eax             ; pproc_descriptor += sizeof(proc_descriptor) * procnum
@@ -1213,7 +1232,7 @@ C1 E0 04              # shl eax, 04
 25 FF FF 00 00        # and eax, 0x0000FFFF      ; mask off high bits to get local addr
 
 # calc process image beginning
-8B 3D 92 82 00 00     # mov edi, [&next_process_address]
+8B 3D 97 82 00 00     # mov edi, [&next_process_address]
 09 C7                 # or edi, eax              ; use low bits from declared entry point
 
 51                    # push ecx
@@ -1224,7 +1243,7 @@ F3 A4                 # rep movsb
 
 # record process in proc descriptor
 BE 00 00 02 00        # mov esi, 0x0020000       ; pproc_descriptor = &proc_descriptor[0]
-A1 8E 82 00 00        # mov eax, [&next_process_num]
+A1 93 82 00 00        # mov eax, [&next_process_num]
 50                    # push eax
 C1 E0 08              # shl eax, 08
 01 C6                 # add esi, eax             ; pproc_descriptor += sizeof(proc_descriptor) * procnum
@@ -1232,15 +1251,16 @@ C1 E0 08              # shl eax, 08
 89 3E                 # mov [esi], edi           ; pproc_descriptor->address = edi
 57                    # push edi
 01 CF                 # add edi, ecx             ; set brk after code
+83 c7 7f              # add edi, 0x7f
 89 7E 04              # mov [esi+4], edi         ; pproc_descriptor->brk
 5F                    # pop edi
 
 # prepare for next process
 40                    # inc eax
-A3 8E 82 00 00        # mov [next_process_num], eax
+A3 93 82 00 00        # mov [next_process_num], eax
 57                    # push edi
 81 C7 00 00 D0 00     # add edi, 0xD00000
-89 3D 92 82 00 00     # mov [&next_process_address], edi
+89 3D 97 82 00 00     # mov [&next_process_address], edi
 5F                    # pop edi
 
 # patch locations
@@ -1269,7 +1289,6 @@ C1 EB 10              # shr ebx, 16              ; mov high bytes to bx
 FF E0                 # jmp eax
 
 
-90 90 90 90 90 90 90 90
 
 
 #----------------------
@@ -1296,16 +1315,26 @@ CB                    # ret
 #[8381]
 BE 7C 83 00 00        # mov esi, "exit"
 9A 82 7F 00 00 08 00  # call console_puts
+#90 90 90 90 90
+#90 90 90 90 90 90 90
 
 89 D8                 # mov eax, ebx
-9A 72 7F 00 00 08 00  # call console_put_hex
+#9A 72 7F 00 00 08 00  # call console_put_hex
+85 C0                 # test eax, eax
+74 08                 # jz okexit
+9A 81 87 00 00 08 00  # call debug_exit
+90
 
-A1 8E 82 00 00        # mov eax, [&next_process_num]
+#:okexit
+A1 97 82 00 00        # mov eax, [&next_process_address]
+2d 00 00 d0 00        # sub eax,  0xD00000
+A3 97 82 00 00        # mov [&next_process_address], eax
+
+A1 93 82 00 00        # mov eax, [&next_process_num]
 48                    # dec eax = current process
-A3 8E 82 00 00        # mov [&next_process_num], eax
+A3 93 82 00 00        # mov [&next_process_num], eax
 48                    # dec eax = parent process
-9A 72 7F 00 00 08 00  # call console_put_hex
-9A 72 7F 00 00 08 00  # call console_put_hex
+
 BE 00 00 02 00        # mov esi, 0x0020000       ; pproc_descriptor = &proc_descriptor[0]
 C1 E0 08              # shl eax, 08
 01 C6                 # add esi, eax
@@ -1322,31 +1351,30 @@ F3 A5                 # rep movsd
 
 CB                    # ret
 
-#[83CC]
+
+#[83D2]
 #lseek
 6C 73 65 65 6B 00
 
-#[83D2]
+#[83D8]
 #handle_syscall_lseek
 50                    # push eax
 56                    # push esi
 
-BE CC 83 00 00        # mov esi, "lseek"
+BE D2 83 00 00        # mov esi, "lseek"
 9A 82 7F 00 00 08 00  # call console_puts
 89 D8                 # mov eax, ebx
 9A 72 7F 00 00 08 00  # call console_put_hex
 BE 00 08 01 00        # mov esi, 0x0010800       ; pfile_descriptor = &file_descriptor[0]
 C1 E0 04              # shl eax, 04
 01 C6                 # add esi, eax
-31 C0                 # xor eax, eax
-89 46 0C              # mov [esi+0xC], eax       ; current offset = 0
+89 4E 0C              # mov [esi+0xC], ecx       ; current offset = 0
 
 5E                    # pop esi
 58                    # pop eax
 CB                    # ret
 
 00 00 00 00 00 00 00 00 00
-90 90 90 90
 
 # ------------------------------------------------------------
 # Utilities
@@ -1742,7 +1770,7 @@ EA FF 85 00 00 08 00  # jmp read_loop
 #------------------------------------------------------------
 #:handle_other_command
 #[868B]
-BE 86 82 00 00        # mov esi, "sc/exec"
+BE 8E 82 00 00        # mov esi, "sc/exec"
 9A 82 7F 00 00 08 00  # call console_puts
 
 # clear arguments
@@ -1784,7 +1812,7 @@ BE 00 04 20 00        # mov esi, arg1
 
 BB 00 00 20 00        # mov ebx, program_name
 B9 7F 86 00 00        # mov ecx, cmd_args
-9A 96 82 00 00 08 00  # call handle_syscall_execve   ; does not return
+9A 9B 82 00 00 08 00  # call handle_syscall_execve   ; does not return
 
 CB
 
@@ -1855,12 +1883,10 @@ FA F4
 
 # END Program Body
 
-
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-#[87C0]
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00

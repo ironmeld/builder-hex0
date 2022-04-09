@@ -30,10 +30,10 @@ source code is applied again.
 
 ### General Build Instructions
 1. Convert builder-hex0.hex0 to binary
-2. Append bytes for a total length of 68608 bytes
+2. Append zero bytes for a total length of 1052672 bytes
 3. Place the shell script for your build directly on partition 4 of the disk image
     * Partition 4 starts at sector 7 which is byte offset 3072 of the disk
-    * The script must be zero terminated, so the maximum length is 65535 bytes (+1 zero byte)
+    * The script must be zero terminated, so the maximum length is 1048575 bytes (+1 zero byte)
     * See the `check` target in the Makefile for guidance
 4. Launch the PC with the disk image
 5. Wait until the machine reboots and then halts

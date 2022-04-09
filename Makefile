@@ -15,7 +15,7 @@
 # The Builder-Hex0 x86 image with no source
 # $< means "first dependency"
 builder-hex0.img: builder-hex0.bin
-	dd if=/dev/zero of=$@ bs=512 count=134
+	dd if=/dev/zero of=$@ bs=512 count=2056
 	dd if=$< of=$@ bs=512 conv=notrunc
 
 # $@ means the target
@@ -32,19 +32,19 @@ recursive: builder-hex0.img
 # Build self with image and verify results
 check: builder-hex0.img builder-hex0.hex0
 	# Copy the original system portion. This must be reproduced byte-for-byte.
-	dd if=builder-hex0.img of=builder-hex0-system.bin bs=512 count=7
+	dd if=builder-hex0.img of=builder-hex0-system.bin bs=512 count=6
 	# Create a build instance
 	cp builder-hex0.img self-build.img
 	echo -n "src " > input.src
 	wc -l ./builder-hex0.hex0 >> input.src
 	cat ./builder-hex0.hex0 >> input.src
-	echo "hex0 ./builder-hex0 /dev/hda" >> input.src
+	echo "hex0 ./builder-hex0.hex0 /dev/hda" >> input.src
 	# Apply source
 	dd if=input.src of=self-build.img bs=512 seek=7 conv=notrunc
 	# Launch build
 	qemu-system-x86_64 -nographic -drive file=self-build.img,format=raw
 	# Extract the new system
-	dd if=self-build.img of=self-build-system.bin bs=512 count=7 status=none
+	dd if=self-build.img of=self-build-system.bin bs=512 count=6 status=none
 	# Ensure the new system is the same as the original
 	diff self-build-system.bin builder-hex0-system.bin
 	rm builder-hex0-system.bin self-build.img self-build-system.bin
