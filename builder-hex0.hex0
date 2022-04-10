@@ -1061,7 +1061,7 @@ C1 E0 08              # shl eax, 08
 01 C6                 # add esi, eax             ; pproc_descriptor += sizeof(proc_descriptor) * procnum
 
 85 DB                 # test ebx, ebx
-74 1D                 # jz get
+74 13                 # jz get
 
 # set
 # initialize memory to zero
