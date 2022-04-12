@@ -788,17 +788,17 @@ CF                    # iret
 
 83 F8 03              # cmp eax, 3
 75 08                 # jne try next
-9A 1A 81 00 00 08 00  # call handle_syscall_read
+9A 22 81 00 00 08 00  # call handle_syscall_read
 CF                    # iret
 
 83 F8 04              # cmp eax, 4
 75 08                 # jne try next
-9A 23 82 00 00 08 00  # call handle_syscall_write
+9A 1C 82 00 00 08 00  # call handle_syscall_write
 CF                    # iret
 
 83 F8 05              # cmp eax, 5
 75 08                 # jne try next
-9A 4D 80 00 00 08 00  # call handle_syscall_open
+9A 55 80 00 00 08 00  # call handle_syscall_open
 CF                    # iret
 
 83 F8 07              # cmp eax, 7
@@ -811,6 +811,11 @@ CF                    # iret
 9A BB 82 00 00 08 00  # call handle_syscall_execve
 CF                    # iret
 
+83 F8 0F              # cmp eax, F
+75 03                 # jne try next
+31 C0                 # xor eax, eax  ; chmod ok
+CF                    # iret
+
 83 F8 13              # cmp eax, 0x13
 75 08                 # jne try next
 9A 21 84 00 00 08 00  # call handle_syscall_lseek
@@ -818,30 +823,30 @@ CF                    # iret
 
 83 F8 2D              # cmp eax, 2D
 75 07                 # jne ret
-9A D5 81 00 00 08 00  # call handle_syscall_brk
+9A DD 81 00 00 08 00  # call handle_syscall_brk
 CF                    # iret
 
 
-#[803D][08]
+#[8045][08]
 #s  c  /  o  p  e  n \0
 73 63 2F 6F 70 65 6E 00
 
-#[8045][04]
+#[804D][04]
 # next_filenum
 04 00 00 00
 
-#[8049][04]
+#[8051][04]
 # next_file_address
 00 00 50 00
 
 #------------------------------------------------------------
-#[804D][20]
+#[8055][20]
 #:handle_syscall_open(ebx=filename, ecx=flags)
 56                    # push esi
 57                    # push edi
 51                    # push ecx
 
-BE 3D 80 00 00        # mov esi, "sc/open"
+BE 45 80 00 00        # mov esi, "sc/open"
 9A 82 7F 00 00 08 00  # call console_puts
 
 89 DE                 # mov esi, ebx
@@ -853,7 +858,7 @@ F7 C1 01 00 00 00     # test ecx, 1
 # copy filename to new slot
 89 DE                 # mov esi, ebx
 BF 00 00 40 00        # mov edi, 0x0400000
-A1 45 80 00 00        # mov eax, [&next_filenum]
+A1 4D 80 00 00        # mov eax, [&next_filenum]
 C1 E0 0A              # shl eax, 0a
 01 C7                 # add edi, eax
 B9 00 04 00 00        # mov ecx, 0x0000400
@@ -861,24 +866,24 @@ F3 A4                 # rep movsb
 
 # set address of file
 BF 00 08 01 00        # mov edi, 0x0010800            ; pfile_descriptor = &file_descriptor[0]
-A1 45 80 00 00        # mov eax, [&next_filenum]
+A1 4D 80 00 00        # mov eax, [&next_filenum]
 C1 E0 04              # shl eax, 04
 01 C7                 # add edi, eax                  ; pfile_descriptor += sizeof(file_descriptor) * next_filenum
-8B 0D 49 80 00 00     # mov ecx, [next_file_address]
+8B 0D 51 80 00 00     # mov ecx, [next_file_address]
 C7 01 00 00 00 00     # mov long [ecx], 0             ; *next_addr = 0  (put a zero between files, not really necessary?)
 41                    # inc ecx
-89 0D 49 80 00 00     # mov [next_file_address], ecx  ; next_file_addr++
+89 0D 51 80 00 00     # mov [next_file_address], ecx  ; next_file_addr++
 89 4F 04              # mov [edi+4], ecx              ; pfile_descriptor->file_addr = ecx
 C7 47 08 00 00 00 00  # mov long [edi+8], 0           ; pfile_descriptor->length = 0
 
-A1 45 80 00 00        # mov eax, [next_filenum]
+A1 4D 80 00 00        # mov eax, [next_filenum]
 40                    # inc eax
-A3 45 80 00 00        # mov [next_filenum], eax  ; next_filenum++
+A3 4D 80 00 00        # mov [next_filenum], eax  ; next_filenum++
 48                    # dec eax
 EB 18                 # jmp finish
 
 #open_read
-9A E2 80 00 00 08 00  # call find_file
+9A EA 80 00 00 08 00  # call find_file
 89 C1                 # mov ecx, eax
 # set read offset to start of file
 BE 00 08 01 00        # mov esi, 0x0010800       ; pfile_descriptor = &file_descriptor[0]
@@ -896,7 +901,7 @@ CB                    # ret
 
 
 #----------------------------------------
-#[80E2]
+#[80EA]
 #:find_file(char * ebx=file_name) returns eax=filenum
 51                    # push ecx
 52                    # push edx
@@ -917,7 +922,7 @@ C1 E0 0A              # shl eax, 0a
 
 # if not on last file, continue checking
 42                    # inc edx
-A1 45 80 00 00        # mov eax, [next_filenum]
+A1 4D 80 00 00        # mov eax, [next_filenum]
 39 C2                 # cmp edx, eax
 75 DF                 # jne checkfile
 
@@ -937,7 +942,7 @@ CB                    # ret
 
 
 #------------------------------------------------------------
-#[811A][70]
+#[8122][70]
 #:handle_syscall_read(ecx=*return_char, ebx=file, edx=length)
 53                    # push ebx
 51                    # push ecx
@@ -1041,11 +1046,11 @@ FF 43 0C              # inc long [ebx+0xC]      ; pfile_descriptor->current_offs
 CB                    # ret
 
 
-#[81D1]
+#[81D9]
 #b  r  k
 62 72 6b 00
 
-#[81D5]
+#[81DD]
 #------------------------------------------------------------
 #:handle_syscall_brk
 56                    # push esi
@@ -1084,27 +1089,34 @@ CB                    # ret
 5E                    # pop esi
 CB                    # ret
 
-
-90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90
-90 90 90 90 90
+90 90 90 90 90 90
 
 
 #------------------------------------------------------------
-#[8223]
+#[821C]
 #:handle_syscall_write(ebx=file,ecx=*char_to_write)
 51                    # push ecx
 52                    # push edx
 56                    # push esi
 57                    # push edi
 
-# stdout?
-83 FB 01              # cmp ebx, 01
-75 0B                 # jnz memfile
+31 C0                 # xor eax, eax            ; bytes_written = 0
 
-# stdout -> console_out
+83 FB 02              # cmp ebx, 02             ; std file?
+7F 12                 # jg memfile
+
+# stdout,stderr -> console_out
+#:std_loop
+50                    # push eax                ; save num_written
 8A 01                 # mov al, [ecx]
 9A 62 7F 00 00 08 00  # call console_putc
-EB 38                 # jmp finish
+58                    # pop eax                 ; restore num_written
+
+40                    # inc eax                 ; num_written++
+41                    # inc ecx                 ; p_dst++
+4A                    # dec edx                 ; count--
+75 F0                 # jnz std_loop
+EB 36                 # jmp finish
 
 #:memfile
 C1 E3 04              # shl ebx, 04
@@ -1113,11 +1125,10 @@ C1 E3 04              # shl ebx, 04
 89 CE                 # mov esi, ecx
 8b 7b 04              # mov edi, [ebx+4]        ; ebx = pfile_descriptor->file_address
 03 7B 0C              # add edi, [ebx+0xC]      ; ebx = file_addr + current_offset
-31 C0                 # xor eax, eax            ; bytes_written = 0
 #write_loop
 
 # Debug: examine the writes to a specific file
-#81 fb 40 0B 01 00     # cmp ebx, 0x10880
+#81 fb 60 0D 01 00     # cmp ebx, 0x10880
 #75 0B
 #50                    # push eax
 #8B 06                 # mov eax, [esi]
@@ -1133,7 +1144,7 @@ C1 E3 04              # shl ebx, 04
 A4                    # movsb
 FF 43 0C              # inc long [ebx+0xC]   ; current_offset++
 FF 43 08              # inc long [ebx+0x8]   ; file_length++
-FF 05 49 80 00 00     # inc long [next_file_addr]
+FF 05 51 80 00 00     # inc long [next_file_address]
 40                    # inc eax              ; num_written++
 4A                    # dec edx
 75 DC                 # jnz write_loop
@@ -1206,6 +1217,7 @@ C1 E0 08              # shl eax, 08
 89 66 08              # mov [esi+0x8], esp       ; save original stack pointer before pushing args
 
 6A 00                 # push 0             ; env; TODO use edx
+
 # count args
 31 C0                 # xor eax, eax       ; passed_args = 0
 # countloop
@@ -1230,7 +1242,7 @@ FF 31                 # push long [ecx]
 
 #finish
 50                    # push eax = argc
-9A E2 80 00 00 08 00  # call find_file
+9A EA 80 00 00 08 00  # call find_file
 
 # get file address and length
 BA 00 08 01 00        # mov edx, 0x0010800       ; pfile_descriptor = &file_descriptor[0]
@@ -1406,7 +1418,9 @@ C1 E0 04              # shl eax, 04
 01 C6                 # add esi, eax
 
 83 FA 01              # cmp edx, 1
-7F 05                 # jg seek_end
+7F 07                 # jg seek_end
+
+#:seek_set
 89 4E 0C              # mov [esi+0xC], ecx       ; set current offset
 89 C8                 # mov eax, ecx
 EB 11                 # jmp done
@@ -1416,7 +1430,7 @@ EB 11                 # jmp done
 01 C8                 # add eax, ecx              ; current_length += offset
 89 46 08              # mov [esi+0x8], eax        ; set current_length
 89 46 0C              # mov [esi+0xc], eax        ; set current_pos
-01 0D 49 80 00 00     # add [next_file_addr], ecx
+01 0D 51 80 00 00     # add [next_file_address], ecx
 
 #done
 5E                    # pop esi
