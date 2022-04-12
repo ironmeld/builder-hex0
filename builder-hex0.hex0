@@ -1395,7 +1395,6 @@ CB                    # ret
 
 #[8421]
 #handle_syscall_lseek
-90 # 50                    # push eax
 56                    # push esi
 
 BE 1B 84 00 00        # mov esi, "lseek"
@@ -1409,6 +1408,7 @@ C1 E0 04              # shl eax, 04
 83 FA 01              # cmp edx, 1
 7F 05                 # jg seek_end
 89 4E 0C              # mov [esi+0xC], ecx       ; set current offset
+89 C8                 # mov eax, ecx
 EB 11                 # jmp done
 
 #:seek_end
@@ -1420,7 +1420,6 @@ EB 11                 # jmp done
 
 #done
 5E                    # pop esi
-90 # 58                    # pop eax
 CB                    # ret
 
 
