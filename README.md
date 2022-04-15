@@ -1,8 +1,19 @@
 # Builder-Hex0 v0.1-prerelease
 Builder-Hex0 is a builder with a hex0 compiler.
 
+It has these features:
+* Less than 3 kilobytes of code
+* Bootable disk image file
+* Minimal POSIX kernel
+* Minimal Shell
+* `src` command to write source files
+* `hex0` Compiler
+
 ## Status
-In development and not ready for any purpose.
+* In development
+* Most development goals have been reached.
+* Experienced developers could take a look
+* Minimal support available
 
 ## Quick Start
 
@@ -64,6 +75,9 @@ The internal shell supports two commands:
 * src: create source file from stdin.
 * hex0: compile hex0 file to binary file.
 
+The internal shell will also execute any file that has previously been written (by hex0).
+
+
 ### The src command
 
 ```
@@ -98,17 +112,16 @@ System calls are implemented with a linux i386 ABI interface.
 System calls are accessed via interrupt 0x80.
 
 The following system calls are implemented to some extent:
-* read, AH=03
-* write, AH=04
-
-The following kernel functions are also available to the user/shell layer.
-* halt() - does not return
-* reboot() - does not return
-
-
-## The Builder Standard Library
-* read()
-* write()
+* exit
+* fork
+* read
+* write
+* open
+* waitpid
+* execve
+* chmod
+* lseek
+* brk
 
 
 ## The Hex0 Language
@@ -182,9 +195,9 @@ character
 * https://dev.to/frosnerd/writing-my-own-boot-loader-3mld (disk read error handling)
 * https://stackoverflow.com/questions/9057670/how-to-write-on-hard-disk-with-bios-interrupt-13h (CHS calculations for int 13)
 
-** OS Development
-https://wiki.osdev.org/Main_Page
-http://asm.sourceforge.net/articles/startup.html (initial stack structure for executables)
+## OS Development
+* https://wiki.osdev.org/Main_Page
+* http://asm.sourceforge.net/articles/startup.html (initial stack structure for executables)
 
 ### Tools
 * https://github.com/copy/v86
