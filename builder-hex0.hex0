@@ -94,61 +94,18 @@
 # We cannot be sure the registers are initialized to zero so we
 # do that first. We far jump to mbr_main in order to set CS.
 31 C0           # xor ax, ax
-8E D8           # COPY_AX_to_DS
-8E C0           # COPY_AX_to_ES
+8E D8           # mov ds, ax
+8E C0           # mov es, ax
 FA              # cli               ;  cli/sti necessary on 8088
-8E D0           # COPY_AX_to_SS
+8E D0           # mov ss, ax
 BC 00 7B        # mov sp, 0x7B00
 FB              # sti
-FC              # CLD ; clear direction flag
+FC              # cld ; clear direction flag
 
-EA 71 7D 00 00  # jmp mbr_main
-
-
-# ------------------------------------------------------------
-# Global Data
-#[7C13]
-80     # boot_drive
-0F     # boot drive max_head  0..15 
-3F     # boot drive num_sectors / track (1..63)
-
-
-#[7C16][0B]
-#H  a  l  t  i  n  g  .  .  . \0
-48 61 6C 74 69 6E 67 2E 2E 2E 00
-
-#[7C21][0D]
-#R  e  b  o  o  t  i  n  g  .  .  . \0
-52 65 62 6F 6F 74 69 6E 67 2E 2E 2E 00
-
-#[7C2E][11]
-#E  R  R  O  R  :     n  o     h  d  a     w  r  i  t  e  s  ! \0
-45 52 52 4F 52 3A 20 6E 6F 20 68 64 61 20 77 72 69 74 65 73 21 00
-
-#[7C44][10]
-#B  u  i  l  d     f  i  n  i  s  h  e  d  . \0
-42 75 69 6C 64 20 66 69 6E 69 73 68 65 64 2E 00
-
-#[7C54][8]
-# available
-00 00 00
-
+EA 25 7D 00 00  # jmp mbr_main
 
 # ------------------------
-#[7C57]
-#:halt
-#
-F4      # hlt
-EB FD   # jmp halt
-
-# ------------------------
-#[7C5A]
-#:reboot
-#
-EA F0 FF 00 F0  # ljmp $F000:FFF0
-
-# ------------------------
-#[7C5F][16]
+#[7C13][16]
 #:console_putc_16(al=c)
 #
 # Note: with QEMU+Seabios this does not flush the last character or
@@ -179,7 +136,7 @@ CD 10     # INT_10
 CB        # RETF
 
 # ------------------------
-#[7C75][31]
+#[7C29][31]
 #:console_put_hex_16(al=byte)
 50              # PUSH_AX
 
@@ -198,7 +155,7 @@ EB 02           # jmp print1
 #16
 
 #print1:
-9A 5F 7C 00 00  # CALL 00007C5F  call console_putc_16
+9A 13 7C 00 00  # call console_putc_16
 
 58              # POP_AX        ; restore original al
 50              # PUSH_AX       ;
@@ -217,10 +174,10 @@ EB 02           # jmp print2
 #35
 
 #print2:
-9A 5F 7C 00 00  # CALL 00007C5F  call console_putc_16
+9A 13 7C 00 00  # CALL 00007C5F  call console_putc_16
 
 #B0 0A           # mov al, 0x0a
-#9A 5F 7C 00 00  # CALL 00007C5F  call console_putc_16
+#9A 13 7C 00 00  # CALL 00007C5F  call console_putc_16
 90 90
 90 90 90 90 90
 
@@ -229,23 +186,25 @@ CB              # retf
 
 
 # ------------------------
-#[7CA6][14]
+# TODO: remove
+#[7C5A][14]
 #:console_puts_16 (ds:si = string)
 #:puts_16_loop
 #
 AC              # lodsb  al=[ds:si++]
 84 C0           # test al, al
 74 07           # jz end_loop
-9A 5F 7C 00 00  # CALL 00007C5F  call console_putc_16
+9A 13 7C 00 00  # call console_putc_16
 EB F4           # jmp puts_16_loop
 
 #:end_loop
 B0 0A           # mov al, 0A
-9A 5F 7C 00 00  # CALL 00007C5F  call console_putc_16
+9A 13 7C 00 00  # call console_putc_16
 CB              # RETF
 
 
-#[7CBA][16]
+#[7C6E][16]
+# TODO: remove
 # ------------------------
 #:get_partition_start_16(al=partition_num 1..4)
 #returns:
@@ -268,7 +227,7 @@ BB AF 7D        # mov bx, 7DAF       ; bx = &partition_table[-1]
 CB              # retf
 
 
-#[7CD0][18]
+#[7C84][18]
 # ------------------------
 #:get_drive_geometry(dl)
 #
@@ -281,16 +240,16 @@ CB              # retf
 B4 08           # mov ah, 8       ; get drive parameters
 CD 13           # INT_13
 
-88 36 14 7C     # mov 0x7C14, dh
+88 36 44 7D     # mov 0x7D44, dh
 80 E1 3F        # and cl, 0x3f
-88 0E 15 7C     # mov 0x7C15, cl
+88 0E 45 7D     # mov 0x7D45, cl
 
 5F              # POP_DI
 07              # POP_ES
 CB              # retf
 
 
-#[7CE8][37]
+#[7C9C][37]
 # ------------------------
 #:next_sector(cx=cylinder/sector, dh = head)
 #
@@ -298,13 +257,13 @@ CB              # retf
 
 88 C8           # mov al, cl          ; get sector number
 24 3F           # and al, 0x3f
-3C 3F           # cmp al, 0x3f        ; if sector_num == 63
+3C 3F           # cmp al, 0x3f        ; if sector_num == 63  TODO: use geometry
 74 04           # jz next_head        ;      goto next_head
 FE C1           # inc cl              ; else sector_num++;
 EB 28           # jmp cleanup
 
 #next_head:
-3A 36 14 7C     # cmp dh, [0x7C14]    ; if head_num == max_head
+3A 36 44 7D     # cmp dh, [0x7D44]    ; if head_num == max_head
 74 09           # jz next_cylinder    ;      goto next_cyclinder
 FE C6           # inc dh              ; else head_num++
 80 E1 C0        # and cl, 0xc0        ;      sector_num = 1
@@ -331,7 +290,7 @@ EB 09           # jmp cleanup
 CB              # retf
 
 
-#[7D1F][29]
+#[7CD3][29]
 #:read_sectors_16(di = *dest_addr, cx=cylinder/sector, dh = head, ax=num_sectors)
 #
 # returns: di - next byte to write to
@@ -345,7 +304,7 @@ CB              # retf
 89 FB            # mov bx, di      ; int 13 writes to bx
 
 #:read_one_loop
-8A 16 13 7C     # mov dl, [0x7C13] ; boot disk
+8A 16 43 7D     # mov dl, [0x7D43] ; boot disk
 B4 02           # mov ah, 2       ; rw mode = 02 (read)
 B0 01           # mov al, 1       ; num_sectors
 CD 13           # INT_13
@@ -355,7 +314,7 @@ CD 13           # INT_13
 
 #19
 # advance and maybe continue
-9A E8 7C 00 00  # call next_sector
+9A 9C 7C 00 00  # call next_sector
 
 # we read one sector, advance
 81 C3 00 02     # add bx, 0x200
@@ -372,7 +331,7 @@ CB              # RETF
 #37
 
 
-#[7D48][29]
+#[7CFC][29]
 #:write_sectors_16(si = *source_addr, cx=cylinder/sector, dh = head, ax=num_sectors)
 #
 # returns: si - next byte to read from
@@ -386,7 +345,7 @@ CB              # RETF
 89 F3            # mov bx, si      ; int 13 reads from [bx]
 
 #:write_one_loop
-8A 16 13 7C     # mov dl, [0x7C13] ; boot disk
+8A 16 43 7D     # mov dl, [0x7D43] ; boot disk
 B4 03           # mov ah, 3       ; rw mode = 03 (write)
 B0 01           # mov al, 1       ; num_sectors
 CD 13           # INT_13
@@ -395,7 +354,7 @@ CD 13           # INT_13
 75 F0           # jnz write_one_loop
 
 # advance and maybe continue
-9A E8 7C 00 00  # call next_sector
+9A 9C 7C 00 00  # call next_sector
 
 # we write one sector, advance
 81 C3 00 02     # add bx, 0x200
@@ -411,18 +370,47 @@ CD 13           # INT_13
 CB              # RETF
 
 
-#[7D71][19]
+#[7D25][1E]
 #:mbr_main (dl=boot_drive)
 # Load the kernel and jump to it
-88 16 13 7C     # mov 0x7C13, dl   ; save boot drive
-9A D0 7C 00 00  # CALL get_drive_geometry()
+88 16 43 7D     # mov 0x7D43, dl   ; save boot drive
+9A 84 7C 00 00  # CALL get_drive_geometry()
 BF 00 7E        # mov di, 0x7E00   ; place kernel after MBR in memory
 B8 07 00        # mov ax, 0x0007   ; num_sectors = 7
 B9 02 00        # LOADI16_CX 0002  ; cylinder = 0, sector_num = 0x02
 B6 00           # LOADI8_DH 00     ; head = 0
-9A 1F 7D 00 00  # call read_sectors_16
+9A D3 7C 00 00  # call read_sectors_16
 EA 00 7E 00 00  # JMP 00007E00  jmp kern_main
 
+
+
+# ------------------------------------------------------------
+# disk_geometry
+#[7D43]
+80     # boot_drive
+0F     # boot drive max_head  0..15 
+3F     # boot drive num_sectors / track (1..63)
+
+#H  a  l  t  i  n  g  .  .  . \0
+48 61 6C 74 69 6E 67 2E 2E 2E 00
+
+#[7D51][0D]
+#R  e  b  o  o  t  i  n  g  .  .  . \0
+52 65 62 6F 6F 74 69 6E 67 2E 2E 2E 00
+
+#[7D5E][16]
+#E  R  R  O  R  :     n  o     h  d  a     w  r  i  t  e  s  ! \0
+45 52 52 4F 52 3A 20 6E 6F 20 68 64 61 20 77 72 69 74 65 73 21 00
+
+#[7D74][10]
+#B  u  i  l  d     f  i  n  i  s  h  e  d  . \0
+42 75 69 6C 64 20 66 69 6E 69 73 68 65 64 2E 00
+
+#[7D84][B]
+# available
+00 00 00 00
+00 00 00 00
+00 00 00
 
 # ------------------------------------------------------------
 # This is the rest of the MBR.
@@ -748,7 +736,7 @@ C3                    # ret
 #:console_putc:
 #
 E8 53 FF FF FF  # CALL enter_16bit_real, next=[7F67]
-9A 5F 7C 00 00  # CALL console_putc_16(al)
+9A 13 7C 00 00  # CALL console_putc_16(al)
 9A 1B 7F 00 00  # CALL resume_32bit_mode
 CB              # RETF
 
@@ -757,7 +745,7 @@ CB              # RETF
 #:console_put_hex
 #[7F72][10]
 E8 43 FF FF FF  # CALL enter_16bit_real, next=[7F77]
-9A 75 7C 00 00  # CALL console_put_hex_16(al)
+9A 29 7C 00 00  # CALL console_put_hex_16(al)
 9A 1B 7F 00 00  # CALL resume_32bit_mode
 CB              # RETF
 
@@ -807,7 +795,7 @@ CB              # retf
 #[7FB8][10]
 #:read_sectors(di = *dest_addr, cx=cylinder/sector, dh = head, ax=num_sectors)
 E8 FD FE FF FF  # CALL enter_16bit_real, next=[7FBD]
-9A 1F 7D 00 00  # CALL read_sectors_16
+9A D3 7C 00 00  # CALL read_sectors_16
 9A 1B 7F 00 00  # CALL resume_32bit_mode
 CB              # RETF
 
@@ -816,7 +804,7 @@ CB              # RETF
 #[7FC8][10]
 #:write_sectors(si = *source_addr, cx=cylinder/sector, dh = head, ax=num_sectors)
 E8 ED FE FF FF  # CALL enter_16bit_real, next=[7FCD]
-9A 48 7D 00 00  # CALL write_sectors_16
+9A FC 7C 00 00  # CALL write_sectors_16
 9A 1B 7F 00 00  # CALL resume_32bit_mode
 CB              # RETF
 
@@ -2163,7 +2151,7 @@ EB DA                 # jmp process_command
 EB D1                 # jmp process_command
 
 #finish
-BE 44 7C 00 00        # mov esi, "Build finished."
+BE 74 7D 00 00        # mov esi, "Build finished."
 9A 82 7F 00 00 08 00  # call console_puts
 
 # copy memory file /dev/hda to the boot disk
@@ -2173,7 +2161,7 @@ BB F3 87 00 00        # mov ebx, "/dev/hda"
 75 23                 # jne ok_exit
 
 #:error_exit
-BE 2E 7C 00 00        # mov esi, "ERROR: No hda writes!"
+BE 5E 7D 00 00        # mov esi, "ERROR: No hda writes!"
 9A 82 7F 00 00 08 00  # call console_puts
 #BE 16 7C 00 00        # mov esi, "Halting..."
 #9A 82 7F 00 00 08 00  # call console_puts
