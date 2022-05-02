@@ -13,14 +13,12 @@
 # get_drive_geometry
 # next_sector
 # read_sectors_16
+# write_sectors_16
 #
-# mbr_main
-
-# --- stage 2
-# kern_main
 # [GDT data]
-# start_32bit_main
+# mbr_main
 # setup_interrupt_handlers
+# [Partition Table]
 # stub_interrupt_handler
 # enter_16bit_real
 # resume_32bit_mode
@@ -30,26 +28,30 @@
 # console_puts
 # get_partition_start
 # read_sectors
+# write_sectors
 #
 # syscall_interrupt_handler
 # handle_syscall_open
+# absolute_path
 # find_file
 # handle_syscall_read
 # handle_syscall_brk
 # handle_syscall_write
+# handle_syscall_fork
 # handle_syscall_execve
-# handle_syscall_waitpid
+# handle_syscall_chdir
 # handle_syscall_exit
+# handle_syscall_lseek
 #
-# --- "User Mode"
 # strcmp
+#
 # read
 # write
 # read_line
 # write_line
 # src
 # hex0
-# app_main
+# internalshell
 
 
 #------------------------------------------------------------
@@ -242,6 +244,7 @@ EB 09           # jmp cleanup
 CB              # retf
 
 
+# ------------------------
 #[7CA5][29]
 #:read_sectors_16(di = *dest_addr, cx=cylinder/sector, dh = head, ax=num_sectors)
 #
@@ -281,6 +284,7 @@ CD 13           # int 0x13
 CB              # retf
 
 
+# ------------------------
 #[7CCE][29]
 #:write_sectors_16(si = *source_addr, cx=cylinder/sector, dh = head, ax=num_sectors)
 #
@@ -384,6 +388,7 @@ FF FF # limit 0:15
 F8 7C 00 00  #  GDT_start
 
 
+# ------------------------
 #[7D26][1E]
 #:mbr_main (dl=boot_drive)
 # Load the kernel and jump to it
@@ -416,18 +421,44 @@ EA 59 7D 08 00        # jmp setup_32bit     ; sets CS
 BD 0F FF 1F 00        # mov ebp, 0x1FFFF0
 89 EC                 # mov esp, ebp
 
-9A 73 7E 00 00 08 00  # call setup_interrupt_handlers
-9A 22 88 00 00 08 00  # call app_main
+9A 7C 7D 00 00 08 00  # call setup_interrupt_handlers
+EA 22 88 00 00 08 00  # jmp internalshell
 
 
-#[7D7C]
-                                    00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+#----------------------------------------
+#[7D7C][40]
+#:setup_interrupt_handlers
+53                    # push ebx
 
-#[7DB0]
-00 00 00 00 00 00 00 00 00 00 00 00 00 00
+# handle the timer interrupt 08
+BB 40 00 01 00        # mov ebx, &interrupt_table[08]
+66 C7 03 BC 7D        # mov word [ebx + 0], low_address stub_interrupt_handler
+66 C7 43 06 00 00     # mov word [ebx + 6], high_address
+66 C7 43 02 08 00     # mov word [ebx + 2], code_segment = 0x0800
+C6 43 05 8E           # mov byte [ebx + 5], flags = 8E
+
+# handle int 80
+BB 00 04 01 00        # mov ebx, &interrupt_table[80]
+66 C7 03 D8 7F        # mov word [ebx + 0], low_address syscall_interrupt_handler
+66 C7 43 06 00 00     # mov word [ebx + 6], high_address
+66 C7 43 02 08 00     # mov word [ebx + 2], code_segment = 0x0800
+C6 43 05 8E           # mov byte [ebx + 5], flags = 8E
+
+# load the interrupt table
+FA                    # cli
+0F 01 1D B4 7E 00 00  # lidt [0x00007EB3] IDT_locator_32
+FB                    # sti
+5B                    # pop ebx
+CB                    # retf
+
+
+#----------------------------------------
+#stub_interrupt_handler
+#[7DBC]
+CF                    # iret
+
+# padding
+00
 
 # Partition entry 1
 #[7DBE]
@@ -495,57 +526,23 @@ DA
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00
 
-
-
-# ------------------------------------------------------------
-# Kernel Functions
-# ------------------------------------------------------------
 
 
 #----------------------------------------
-#[7E73][40]
-#:setup_interrupt_handlers
-53                    # push ebx
-
-# handle the timer interrupt 08
-BB 40 00 01 00        # mov ebx, &interrupt_table[08]
-66 C7 03 B9 7E        # mov word [ebx + 0], low_address stub_interrupt_handler
-66 C7 43 06 00 00     # mov word [ebx + 6], high_address
-66 C7 43 02 08 00     # mov word [ebx + 2], code_segment = 0x0800
-C6 43 05 8E           # mov byte [ebx + 5], flags = 8E
-
-# handle int 80
-BB 00 04 01 00        # mov ebx, &interrupt_table[80]
-66 C7 03 D8 7F        # mov word [ebx + 0], low_address syscall_interrupt_handler
-66 C7 43 06 00 00     # mov word [ebx + 6], high_address
-66 C7 43 02 08 00     # mov word [ebx + 2], code_segment = 0x0800
-C6 43 05 8E           # mov byte [ebx + 5], flags = 8E
-
-# load the interrupt table
-FA                    # cli
-0F 01 1D B3 7E 00 00  # lidt [0x00007EB3] IDT_locator_32
-FB                    # sti
-5B                    # pop ebx
-CB                    # retf
-
-
-#----------------------------------------
-#[7EB3][06]
+#[7EB4][06]
 #:IDT_locator_32
 FF 07        #  length
 00 00 01 00  #  IDT_start
-
-
-#----------------------------------------
-#stub_interrupt_handler
-#[7EB9]
-CF                    # iret
 
 
 #------------------------------------------------------------
@@ -641,7 +638,7 @@ B8 10 00 00 00        # mov eax, 0x0010      ; data descriptor
 8E E0                 # mov fs, eax
 8E E8                 # mov gs, eax
 8B 25 04 7B 00 00     # mov esp, [0x7B04]   ; restore, (saved in enter_16bit_mode)
-9A 73 7E 00 00 08 00  # call setup_interrupt_handlers
+9A 7C 7D 00 00 08 00  # call setup_interrupt_handlers
 52                    # push edx            ; setup our return location
 # These restore the 16 bit portion of these registers, which may be a
 # return value from a 16 bit function, and they also restore any previous high
@@ -702,7 +699,7 @@ CB                    # RETF
 56              # PUSH_ESI
 
 6B C0 10        # imul eax, 0x10
-89 c6           # mov esi, eax         ; esi = entry_offset
+89 C6           # mov esi, eax         ; esi = entry_offset
 BB AE 7D 00 00  # mov ebx, 7DAE        ; ebx = &partition_table[-1]
 8A 74 33 01     # mov dh, [ebx+esi+1]  ; dh = head = partition_table[al][0]
 66 8B 4C 33 02  # mov cx, [ebx+esi+2]  ; cx = cyl/sector = partition_table[al][1]
@@ -2038,7 +2035,7 @@ CB
 # ------------------------------------------------------------
 # Main Program Body
 # ------------------------------------------------------------
-#:app_main
+#:internalshell
 # Set up /dev/hda4 as global stdin
 B8 04 00 00 00        # mov eax, 4
 9A A0 7F 00 00 08 00  # call get_partition_start(4)
