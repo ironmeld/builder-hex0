@@ -94,7 +94,7 @@
 BC 00 7B        # mov sp, 0x7B00
 FC              # cld ; clear direction flag
 
-EA F4 7C 00 00  # jmp mbr_main
+EA F7 7C 00 00  # jmp mbr_main
 
 
 # ------------------------
@@ -171,7 +171,15 @@ CB              # retf
 
 
 
-#[7C51][18]
+# ------------------------------------------------------------
+# disk_geometry
+#[7C51]
+80     # boot_drive
+0F     # boot drive max_head  0..15
+3F     # boot drive max_sector / track (1..63)
+
+
+#[7C54][18]
 # ------------------------
 #:get_drive_geometry(dl)
 #
@@ -184,16 +192,16 @@ CB              # retf
 B4 08           # mov ah, 8       ; get drive parameters
 CD 13           # int 0x13
 
-88 36 13 7D     # mov 0x7D13, dh  ; max_head
+88 36 52 7C     # mov [max_head], dh  ; max_head
 80 E1 3F        # and cl, 0x3f
-88 0E 14 7D     # mov 0x7D14, cl  ; num_sectors
+88 0E 53 7C     # mov [max_sector], cl  ; num_sectors
 
 5F              # pop di
 07              # pop es
 CB              # retf
 
 
-#[7C69][37]
+#[7C6C][37]
 # ------------------------
 #:next_sector(cx=cylinder/sector, dh = head)
 #
@@ -201,13 +209,13 @@ CB              # retf
 
 88 C8           # mov al, cl          ; get sector number
 24 3F           # and al, 0x3f
-3A 06 14 7D     # cmp al, [0x7d14]    ; if sector_num == num_sectors
+3A 06 53 7C     # cmp al, [max_sector]; if sector_num == max_sector
 74 04           # jz next_head        ;      goto next_head
 FE C1           # inc cl              ; else sector_num++;
 EB 28           # jmp cleanup
 
 #next_head:
-3A 36 13 7D     # cmp dh, [0x7D13]    ; if head_num == max_head
+3A 36 52 7C     # cmp dh, [max_head]  ; if head_num == max_head
 74 09           # jz next_cylinder    ;      goto next_cyclinder
 FE C6           # inc dh              ; else head_num++
 80 E1 C0        # and cl, 0xc0        ;      sector_num = 1
@@ -230,34 +238,34 @@ EB 09           # jmp cleanup
 80 C1 41        # add cl, 0x41        ; cylinder_high++, sector_num++
 
 #cleanup:
-58              # POP_AX
+58              # pop ax
 CB              # retf
 
 
-#[7CA2][29]
+#[7CA5][29]
 #:read_sectors_16(di = *dest_addr, cx=cylinder/sector, dh = head, ax=num_sectors)
 #
 # returns: di - next byte to write to
 #          cx,dh - next disk sector to read from
 #
-50              # PUSH_AX
-53              # PUSH_BX
-56              # PUSH_SI
+50              # push ax
+53              # push bx
+56              # push si
 
-89 C6            # mov si, ax      ; si=num_sectors
-89 FB            # mov bx, di      ; int 13 writes to bx
+89 C6           # mov si, ax      ; si=num_sectors
+89 FB           # mov bx, di      ; int 13 writes to bx
 
 #:read_one_loop
-8A 16 12 7D     # mov dl, [0x7D12] ; boot_drive
+8A 16 51 7C     # mov dl, [boot_drive]
 B4 02           # mov ah, 2        ; rw mode = 02 (read)
 B0 01           # mov al, 1        ; num_sectors
-CD 13           # INT_13
+CD 13           # int 0x13
 72 F4           # jnc read_one_loop
 3C 01           # cmp al, 1
 75 F0           # jnz read_one_loop
 
 # advance and maybe continue
-9A 69 7C 00 00  # call next_sector
+9A 6C 7C 00 00  # call next_sector
 
 # we read one sector, advance
 81 C3 00 02     # add bx, 0x200
@@ -267,36 +275,36 @@ CD 13           # INT_13
 
 89 DF           # mov di, bx
 
-5E              # POP_SI
-5B              # POP_BX
-58              # POP_AX
-CB              # RETF
+5E              # pop si
+5B              # pop bx
+58              # pop ax
+CB              # retf
 
 
-#[7CCB][29]
+#[7CCE][29]
 #:write_sectors_16(si = *source_addr, cx=cylinder/sector, dh = head, ax=num_sectors)
 #
 # returns: si - next byte to read from
 #          cx,dh - next disk sector to read from
 #
-50              # PUSH_AX
-53              # PUSH_BX
-57              # PUSH_DI
+50              # push ax
+53              # push bx
+57              # push di
 
-89 C7            # mov di, ax      ; di=num_sectors
-89 F3            # mov bx, si      ; int 13 reads from [bx]
+89 C7           # mov di, ax      ; di=num_sectors
+89 F3           # mov bx, si      ; int 13 reads from [bx]
 
 #:write_one_loop
-8A 16 12 7D     # mov dl, [0x7D12] ; boot_drive
+8A 16 51 7C     # mov dl, [boot_drive]
 B4 03           # mov ah, 3       ; rw mode = 03 (write)
 B0 01           # mov al, 1       ; num_sectors
-CD 13           # INT_13
+CD 13           # int 0x13
 72 F4           # jnc write_one_loop
 3C 01           # cmp al, 1
 75 F0           # jnz write_one_loop
 
 # advance and maybe continue
-9A 69 7C 00 00  # call next_sector
+9A 6C 7C 00 00  # call next_sector
 
 # we write one sector, advance
 81 C3 00 02     # add bx, 0x200
@@ -306,32 +314,24 @@ CD 13           # INT_13
 
 89 DE           # mov si, bx
 
-5F              # POP_DI
-5B              # POP_BX
-58              # POP_AX
-CB              # RETF
+5F              # pop di
+5B              # pop bx
+58              # pop ax
+CB              # retf
 
 
-#[7CF4][1E]
+#[7CF7][1E]
 #:mbr_main (dl=boot_drive)
 # Load the kernel and jump to it
-88 16 12 7D     # mov 0x7D12, dl   ; save boot_drive
-9A 51 7C 00 00  # CALL get_drive_geometry()
+88 16 51 7C     # mov [boot_drive], dl
+9A 54 7C 00 00  # call get_drive_geometry()
 BF 00 7E        # mov di, 0x7E00   ; place kernel after MBR in memory
 B8 07 00        # mov ax, 0x0007   ; num_sectors = 7
-B9 02 00        # LOADI16_CX 0002  ; cylinder = 0, sector_num = 0x02
-B6 00           # LOADI8_DH 00     ; head = 0
-9A A2 7C 00 00  # call read_sectors_16
-EA 00 7E 00 00  # JMP 00007E00  jmp kern_main
+B9 02 00        # mov cx, 0x0002   ; cylinder = 0, sector_num = 0x02
+B6 00           # mov dh, 0        ; head = 0
+9A A5 7C 00 00  # call read_sectors_16
+EA 00 7E 00 00  # jmp kern_main
 
-
-
-# ------------------------------------------------------------
-# disk_geometry
-#[7D12]
-80     # boot_drive
-0F     # boot drive max_head  0..15 
-3F     # boot drive num_sectors / track (1..63)
 
 
                00 00 00 00 00 00 00 00 00 00 00
@@ -721,7 +721,7 @@ CB              # retf
 #[7FB8][10]
 #:read_sectors(di = *dest_addr, cx=cylinder/sector, dh = head, ax=num_sectors)
 E8 FD FE FF FF  # CALL enter_16bit_real, next=[7FBD]
-9A A2 7C 00 00  # CALL read_sectors_16
+9A A5 7C 00 00  # CALL read_sectors_16
 9A 1B 7F 00 00  # CALL resume_32bit_mode
 CB              # RETF
 
@@ -730,7 +730,7 @@ CB              # RETF
 #[7FC8][10]
 #:write_sectors(si = *source_addr, cx=cylinder/sector, dh = head, ax=num_sectors)
 E8 ED FE FF FF  # CALL enter_16bit_real, next=[7FCD]
-9A CB 7C 00 00  # CALL write_sectors_16
+9A CE 7C 00 00  # CALL write_sectors_16
 9A 1B 7F 00 00  # CALL resume_32bit_mode
 CB              # RETF
 
