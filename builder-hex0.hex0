@@ -90,17 +90,15 @@
 31 C0           # xor ax, ax
 8E D8           # mov ds, ax
 8E C0           # mov es, ax
-FA              # cli               ;  cli/sti necessary on 8088
 8E D0           # mov ss, ax
 BC 00 7B        # mov sp, 0x7B00
-FB              # sti
 FC              # cld ; clear direction flag
 
 EA F4 7C 00 00  # jmp mbr_main
 
 
 # ------------------------
-#[7C13][16]
+#[7C11][16]
 #:console_putc_16(al=c)
 #
 # Note: with QEMU+Seabios this does not flush the last character or
@@ -132,7 +130,7 @@ CB              # retf
 
 
 # ------------------------
-#[7C29][31]
+#[7C27][31]
 #:console_put_hex_16(al=byte)
 50              # push ax
 
@@ -149,7 +147,7 @@ EB 02           # jmp print1
 04 37           # add al, 0x37
 
 #print1:
-9A 13 7C 00 00  # call console_putc_16
+9A 11 7C 00 00  # call console_putc_16
 
 58              # pop ax        ; restore original al
 50              # push ax       ;
@@ -166,14 +164,14 @@ EB 02           # jmp print2
 04 37           # add al, 0x37
 
 #print2:
-9A 13 7C 00 00  # call console_putc_16
+9A 11 7C 00 00  # call console_putc_16
 
 58              # pop ax
 CB              # retf
 
 
 
-#[7C53][18]
+#[7C51][18]
 # ------------------------
 #:get_drive_geometry(dl)
 #
@@ -195,7 +193,7 @@ CD 13           # int 0x13
 CB              # retf
 
 
-#[7C6B][37]
+#[7C69][37]
 # ------------------------
 #:next_sector(cx=cylinder/sector, dh = head)
 #
@@ -203,7 +201,7 @@ CB              # retf
 
 88 C8           # mov al, cl          ; get sector number
 24 3F           # and al, 0x3f
-3C 3F           # cmp al, 0x3f        ; if sector_num == num_sectors  TODO: use geometry
+3A 06 14 7D     # cmp al, [0x7d14]    ; if sector_num == num_sectors
 74 04           # jz next_head        ;      goto next_head
 FE C1           # inc cl              ; else sector_num++;
 EB 28           # jmp cleanup
@@ -259,7 +257,7 @@ CD 13           # INT_13
 75 F0           # jnz read_one_loop
 
 # advance and maybe continue
-9A 6B 7C 00 00  # call next_sector
+9A 69 7C 00 00  # call next_sector
 
 # we read one sector, advance
 81 C3 00 02     # add bx, 0x200
@@ -298,7 +296,7 @@ CD 13           # INT_13
 75 F0           # jnz write_one_loop
 
 # advance and maybe continue
-9A 6B 7C 00 00  # call next_sector
+9A 69 7C 00 00  # call next_sector
 
 # we write one sector, advance
 81 C3 00 02     # add bx, 0x200
@@ -318,7 +316,7 @@ CB              # RETF
 #:mbr_main (dl=boot_drive)
 # Load the kernel and jump to it
 88 16 12 7D     # mov 0x7D12, dl   ; save boot_drive
-9A 53 7C 00 00  # CALL get_drive_geometry()
+9A 51 7C 00 00  # CALL get_drive_geometry()
 BF 00 7E        # mov di, 0x7E00   ; place kernel after MBR in memory
 B8 07 00        # mov ax, 0x0007   ; num_sectors = 7
 B9 02 00        # LOADI16_CX 0002  ; cylinder = 0, sector_num = 0x02
@@ -664,7 +662,7 @@ C3                    # ret
 #:console_putc:
 #
 E8 53 FF FF FF  # CALL enter_16bit_real, next=[7F67]
-9A 13 7C 00 00  # CALL console_putc_16(al)
+9A 11 7C 00 00  # CALL console_putc_16(al)
 9A 1B 7F 00 00  # CALL resume_32bit_mode
 CB              # RETF
 
@@ -673,7 +671,7 @@ CB              # RETF
 #:console_put_hex
 #[7F72][10]
 E8 43 FF FF FF  # CALL enter_16bit_real, next=[7F77]
-9A 29 7C 00 00  # CALL console_put_hex_16(al)
+9A 27 7C 00 00  # CALL console_put_hex_16(al)
 9A 1B 7F 00 00  # CALL resume_32bit_mode
 CB              # RETF
 
