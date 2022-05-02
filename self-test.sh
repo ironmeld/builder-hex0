@@ -23,9 +23,12 @@ qemu-system-x86_64 -m 256M -nographic -drive file=self-build.img,format=raw --no
 
 # Get result
 lengthhex=$(tail -1 build.log | tr -d '\r')
-length=$(printf "%d\n" $((16#$lengthhex)))
 
-if [ "$length" -gt 0 ]; then
+if [[ "$lengthhex" = ERROR* ]]; then
+    echo "Self-build check failed!"
+    result=1
+else
+    length=$(printf "%d\n" $((16#$lengthhex)))
     echo "$length"
     # Extract the result
     dd if=self-build.img of=self-build-system.bin bs=1 count="$length" status=none
@@ -33,9 +36,7 @@ if [ "$length" -gt 0 ]; then
     diff self-build-system.bin builder-hex0-system.bin
     echo "Self-build check completed successfully!"
     result=0
-else
-    echo "Self-build check failed!"
-    result=1
 fi
+
 rm -f builder-hex0-system.bin self-build.img self-build-system.bin
 exit "$result"
