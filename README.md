@@ -2,7 +2,7 @@
 Builder-Hex0 is a builder with a hex0 compiler.
 
 It has these features:
-* Less than 3 kilobytes of code
+* Less than 4 kilobytes of code
 * Bootable disk image file
 * Minimal POSIX kernel
 * Minimal Shell
@@ -12,50 +12,55 @@ It has these features:
 ## Status
 * In development
 * Most development goals have been reached.
+  * It can build itself
+  * It can build stage0-posix
 * Experienced developers could take a look
 * Minimal support available
 
+## Why?
+
+This kernel is for bootstrapping compilers without having to trust a prebuilt binary. You still have to trust that the hex codes proovided represent the x86 opcodes in the comments. But verifying the opcodes have been encoded properly is a straightforward process that you are encouraged to do using your own methods. You can also convert the hex to binary by any method you prefer. A Makefile is provided to do all this for you, for convenience, but you are free to distrust that in favor of your own methods.
+
 ## Quick Start
 
-To build an image that is ready to build (builder-hex0.img):
-
+This command verifies the builder can build itself correctly:
 ```
-make
-```
-
-You can also build the boot sectors manually:
-```
-cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > builder-hex0.bin
-```
-* cut will strip comments starting with pound or semicolon.
-* xxd converts hex to binary.
-
-To run a self check:
-```
-make check
+make test
 ```
 
-The self check takes source code for the build image and rebuilds the build image.
-Note that once the build is complete, the image will not build again if restarted unless
-source code is applied again.
+The self check converts the hex to a binary boot image, appends a self-build script to the image, boots the image to run the build, and afterwards verifies the result.
 
-### General Build Instructions
-1. Convert builder-hex0.hex0 to binary
-2. Append zero bytes for a total length of 1052672 bytes
-3. Place the shell script for your build directly on partition 4 of the disk image
-    * Partition 4 starts at sector 7 which is byte offset 3072 of the disk
-    * The script must be zero terminated, so the maximum length is 1048575 bytes (+1 zero byte)
-    * See the `check` target in the Makefile for guidance
+### Detailed Build Instructions
+1. Convert builder-hex0.hex0 to binary using a method you trust
+2. Append zero bytes to the image in multiples of 512 bytes (sectors)
+3. Write the shell script for your build directly on partition 4 of the disk image
+    * Partition 4 starts at sector 8 which is byte offset 3584 of the disk
+    * The script must be zero terminated, so the maximum length is the image size minus 3585 bytes
+    * See the self-test.sh for guidance
 4. Launch the PC with the disk image
 5. Wait until the machine reboots and then halts
 6. The disk image itself is the result of the build
 
 
+You can use the Makefile to build an image (builder-hex0.img) ready for your source code:
+
+```
+make
+```
+
+FYI, this is the main command that creates the boot sectors:
+```
+cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > builder-hex0.bin
+```
+* cut strips comments starting with pound or semicolon.
+* xxd converts hex to binary.
+
 ## Machine Requirements
-* x86 32 bit Processor
+* x86 32-bit Processor
 * PC compatible-BIOS
    * Must support int 10h,AH=0Eh (Write character to console)
    * Must support int 13h,AH=02h (Read Sectors)
+   * Must support int 13h,AH=03h (Write Sectors)
    * Must support int 13h,AH=08h (Read Drive Parameters)
    * Must support int 15h,0x2401 (A20 activation)
 
@@ -71,11 +76,11 @@ Essentially, the kernel starts by executing the equivalent of this command:
 cat /dev/hda4 | internalshell
 ```
 
-The internal shell supports two commands:
+The internal shell supports two build-in commands:
 * src: create source file from stdin.
 * hex0: compile hex0 file to binary file.
 
-The internal shell will also execute any file that has previously been written (by hex0).
+The internal shell will also execute any file that has previously been written (by hex0). Note that the internal shell only supports parsing exactly one argument that it will pass to the command. (This is enough to support executing a new shell and passing it the name of a shell script to run.)
 
 
 ### The src command
@@ -122,6 +127,7 @@ The following system calls are implemented to some extent:
 * chmod
 * lseek
 * brk
+* chdir
 
 
 ## The Hex0 Language
