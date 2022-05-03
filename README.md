@@ -3,10 +3,11 @@ Builder-Hex0 is a builder with a hex0 compiler. It runs in the form of a bootabl
 
 It has these features:
 * Minimal 32-bit mode POSIX kernel
+* The kernel is less than 3K in size
 * Built-in Minimal Shell
 * Built-in `src` command to load source files
 * Built-in `hex0` Compiler converts hex source to binary files
-* Less than 3 kilobytes of code
+* Written in 2K lines of commented hex
 
 ## Status
 * Development goals have been reached.
