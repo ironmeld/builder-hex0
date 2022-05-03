@@ -1,21 +1,19 @@
 # Builder-Hex0 v0.1-prerelease
-Builder-Hex0 is a builder with a hex0 compiler.
+Builder-Hex0 is a builder with a hex0 compiler. It runs in the form of a bootable disk image.
 
 It has these features:
-* Less than 4 kilobytes of code
-* Bootable disk image file
-* Minimal POSIX kernel
-* Minimal Shell
-* `src` command to write source files
-* `hex0` Compiler
+* Minimal 32-bit mode POSIX kernel
+* Built-in Minimal Shell
+* Built-in `src` command to load source files
+* Built-in `hex0` Compiler converts hex source to binary files
+* Less than 3 kilobytes of code
 
 ## Status
-* In development
-* Most development goals have been reached.
+* Development goals have been reached.
   * It can build itself
   * It can build stage0-posix
-* Experienced developers could take a look
 * Minimal support available
+* For Experienced developers
 
 ## Why?
 
@@ -36,9 +34,9 @@ The self check converts the hex to a binary boot image, appends a self-build scr
 3. Write the shell script for your build directly on partition 4 of the disk image
     * Partition 4 starts at sector 8 which is byte offset 3584 of the disk
     * The script must be zero terminated, so the maximum length is the image size minus 3585 bytes
-    * See the self-test.sh for guidance
+    * See self-test.sh for guidance
 4. Launch the PC with the disk image
-5. Wait until the machine reboots and then halts
+5. Wait until the machine reboots
 6. The disk image itself is the result of the build
 
 
@@ -113,7 +111,7 @@ Reads hex0 from the input file, converts to binary, and writes to the output fil
 
 ## The Hex0 Builder System Interface
 
-System calls are implemented with a linux i386 ABI interface.
+System calls are implemented with a POSIX i386 ABI interface.
 System calls are accessed via interrupt 0x80.
 
 The following system calls are implemented to some extent:

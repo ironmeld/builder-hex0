@@ -3,7 +3,7 @@
 set -e
 
 # Copy the original system portion. This must be reproduced byte-for-byte.
-dd if=builder-hex0.img of=builder-hex0-system.bin bs=512 count=7
+dd if=builder-hex0.img of=builder-hex0-system.bin bs=512 count=6
 # Create a build instance
 cp builder-hex0.img self-build.img
 
