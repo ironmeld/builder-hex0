@@ -32,7 +32,7 @@ test: builder-hex0.img builder-hex0.hex0
 	./self-test.sh
 
 clean:
-	rm -f builder-hex0.bin builder-hex0.img builder-hex0-system.bin self-build-system.bin self-build.img
+	rm -f builder-hex0.bin builder-hex0.img builder-hex0-system.bin input.src self-build-system.bin self-build.img build.log
 
 # Make does not check whether PHONY targets already exist as files or dirs.
 # It just invokes their recipes when they are targeted, no questions asked.
