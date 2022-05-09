@@ -5,9 +5,8 @@
 # hex0 is a "language" for binary encoding in hexadecimal
 # with support for comments.
 
+# Functions:
 # _start
-# console_putc
-# console_put_hex
 # get_drive_geometry
 # next_sector
 # read_sector
