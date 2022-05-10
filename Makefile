@@ -42,9 +42,11 @@ builder-hex0.src: builder-hex0.hex0 hex0-to-src.sh
 
 
 # The "full" builder-hex0 built by the self-built mini builder
-builder-hex0-mini-built.bin: builder-hex0-mini-self-built.bin builder-hex0.hex0 build-mini.sh
+builder-hex0-mini-built.bin: builder-hex0-mini-self-built.bin builder-hex0.hex0 build-mini.sh builder-hex0-seed.bin
 	# params: boot sectors to use, source to append, size of binary to extract, name of extracted binary
 	./build-mini.sh builder-hex0-mini-self-built.bin builder-hex0.hex0 3072 builder-hex0-mini-built.bin
+	# verify that it matches the seed
+	diff builder-hex0-seed.bin builder-hex0-mini-built.bin
 
 
 # builder-hex0-mini built by the mini builder built by the seed mini bulder

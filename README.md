@@ -8,6 +8,7 @@ It has these features:
 * Built-in `src` command to load source files
 * Built-in `hex0` Compiler converts hex source to binary files
 * Written in 2K lines of commented hex
+* Bootstraps using a 16-bit "mini" boot kernel that is only 384 bytes
 
 ## Status
 * Development goals have been reached.
@@ -20,16 +21,23 @@ It has these features:
 
 This kernel is for bootstrapping compilers without having to trust a prebuilt binary. You still have to trust that the hex codes proovided represent the x86 opcodes in the comments. But verifying the opcodes have been encoded properly is a straightforward process that you are encouraged to do using your own methods. You can also convert the hex to binary by any method you prefer. A Makefile is provided to do all this for you, for convenience, but you are free to distrust that in favor of your own methods.
 
-## Quick Start
+## Building with make
 
-This command verifies the builder can build itself correctly:
+Run:
+
 ```
-make test
+make
 ```
 
-The self check converts the hex to a binary boot image, appends a self-build script to the image, boots the image to run the build, and afterwards verifies the result.
+The Makefile does this:
 
-### Detailed Build Instructions
+* Builds the "mini" (384 byte) boot kernel "seed" using command line utilities.
+* Builds the "full" (3K) boot kernel "seed" using command line utilities.
+* Builds the "mini" boot kernel using the mini boot kernel and verifies it matches the seed.
+* Builds the full boot kernel using the self-built mini boot kernel and verifies it matches the seed.
+* Builds the full boot kernel using the full boot kernel and verfies it matches the previous one built with self-built mini
+
+### Manual Build Instructions
 1. Convert builder-hex0.hex0 to binary using a method you trust
 2. Append zero bytes to the image in multiples of 512 bytes (sectors)
 3. Write the shell script for your build directly on partition 4 of the disk image
@@ -40,19 +48,6 @@ The self check converts the hex to a binary boot image, appends a self-build scr
 5. Wait until the machine reboots
 6. The disk image itself is the result of the build
 
-
-You can use the Makefile to build an image (builder-hex0.img) ready for your source code:
-
-```
-make
-```
-
-FYI, this is the main command that creates the boot sectors:
-```
-cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > builder-hex0.bin
-```
-* cut strips comments starting with pound or semicolon.
-* xxd converts hex to binary.
 
 ## Machine Requirements
 * x86 32-bit Processor
@@ -127,6 +122,25 @@ The following system calls are implemented to some extent:
 * lseek
 * brk
 * chdir
+
+
+## Hacks
+
+There are a few non-obvious techniques used to pull this off.
+
+### fork/execve/waitpid
+
+The kernel "simulates" a spawn pattern with this pattern:
+* Fork records the top of the stack and returns as child.
+* execve moves the parent process image aside and runs the child in the same address space.
+* When the child calls exit, the parent process and stack is restored and returns from the previous fork again, as parent
+* The parent calls waitpid which returns success because the child is already finished
+
+### File system
+
+* All written files are kept in memory.
+* Opening an existing file for write creates a new file. Only the most recent one is active.
+* At the end, the file named "/dev/hda" is flushed to the disk and the length is output to the screen. This can be used to build an executable or a boot image, as you please.
 
 
 ## The Hex0 Language
