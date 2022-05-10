@@ -1,4 +1,4 @@
-# Builder-Hex0 v0.1-prerelease
+# Builder-Hex0 v1.0-prerelease
 Builder-Hex0 is a builder with a hex0 compiler. It runs in the form of a bootable disk image.
 
 It has these features:
@@ -11,15 +11,24 @@ It has these features:
 * Bootstraps using a 16-bit "mini" boot kernel that is only 384 bytes
 
 ## Status
-* Development goals have been reached.
+
+* Initial development goals have been reached.
+  * It can build x86 [stage0-posix](https://github.com/oriansj/stage0-posix) up to a working M2-Mesoplanet compiler, which supports a subset of C
   * It can build itself
-  * It can build stage0-posix
-* Minimal support available
-* For Experienced developers
+
+* For experienced developers
+  * Natively written in hex0
+  * All relative jumps were hand calculated
+  * Includes nasm-like assembly comments for reference only
+  * Minimal to no error checking
+
+* Could be somewhat smaller (e.g. with relative calls and inlining)
+
 
 ## Why?
 
-This kernel is for bootstrapping compilers without having to trust a prebuilt binary. You still have to trust that the hex codes proovided represent the x86 opcodes in the comments. But verifying the opcodes have been encoded properly is a straightforward process that you are encouraged to do using your own methods. You can also convert the hex to binary by any method you prefer. A Makefile is provided to do all this for you, for convenience, but you are free to distrust that in favor of your own methods.
+This kernel is for bootstrapping compilers without having to trust a prebuilt binary. You still have to trust that the hex codes provided represent the x86 opcodes in the comments. But verifying the opcodes have been encoded properly is a straightforward process that you are encouraged to do using your own methods. You can also convert the hex to binary by any method you prefer. A Makefile is provided to do all this for you, for convenience, but you are free to distrust that in favor of your own methods.
+
 
 ## Building with make
 
@@ -31,13 +40,15 @@ make
 
 The Makefile does this:
 
-* Builds the "mini" (384 byte) boot kernel "seed" using command line utilities.
+* Builds the "mini" (384 byte) boot kernel "seed" using command line utilities (cut and xxd)
 * Builds the "full" (3K) boot kernel "seed" using command line utilities.
 * Builds the "mini" boot kernel using the mini boot kernel and verifies it matches the seed.
 * Builds the full boot kernel using the self-built mini boot kernel and verifies it matches the seed.
 * Builds the full boot kernel using the full boot kernel and verfies it matches the previous one built with self-built mini
 
-### Manual Build Instructions
+
+## Manual Build Instructions
+
 1. Convert builder-hex0.hex0 to binary using a method you trust
 2. Append zero bytes to the image in multiples of 512 bytes (sectors)
 3. Write the shell script for your build directly on partition 4 of the disk image
@@ -70,11 +81,11 @@ Essentially, the kernel starts by executing the equivalent of this command:
 cat /dev/hda4 | internalshell
 ```
 
-The internal shell supports two build-in commands:
+The internal shell includes two build-in commands:
 * src: create source file from stdin.
 * hex0: compile hex0 file to binary file.
 
-The internal shell will also execute any file that has previously been written (by hex0). Note that the internal shell only supports parsing exactly one argument that it will pass to the command. (This is enough to support executing a new shell and passing it the name of a shell script to run.)
+The internal shell will also execute any file that has previously been written (by hex0). Note that the internal shell only supports parsing exactly one argument that it will pass to the command. This is enough to support executing a new shell and passing it the name of a shell script to run.
 
 
 ### The src command
@@ -128,6 +139,10 @@ The following system calls are implemented to some extent:
 
 There are a few non-obvious techniques used to pull this off.
 
+### BIOS access
+
+The kernel runs in 32-bit mode but temporarily drops into 16-bit mode to access BIOS routines (for disk and console I/O).
+
 ### fork/execve/waitpid
 
 The kernel "simulates" a spawn pattern with this pattern:
@@ -139,7 +154,7 @@ The kernel "simulates" a spawn pattern with this pattern:
 ### File system
 
 * All written files are kept in memory.
-* Opening an existing file for write creates a new file. Only the most recent one is active.
+* Opening an existing file for write actually creates a new file. Only the most recent one is active.
 * At the end, the file named "/dev/hda" is flushed to the disk and the length is output to the screen. This can be used to build an executable or a boot image, as you please.
 
 
