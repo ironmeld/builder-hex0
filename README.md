@@ -133,6 +133,7 @@ The following system calls are implemented to some extent:
 * lseek
 * brk
 * chdir
+* access
 
 
 ## Hacks

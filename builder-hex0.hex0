@@ -744,12 +744,6 @@ CF                    # iret
 9A AF 7F 00 00 08 00  # call handle_syscall_open
 CF                    # iret
 
-# close
-3C 06                 # cmp al, 6
-75 03                 # jne try next
-31 C0                 # xor eax, eax
-CF                    # iret
-
 # waitpid
 3C 07                 # cmp eax, 7
 75 05                 # jne try next
@@ -767,21 +761,23 @@ CF                    # iret
 9A 31 83 00 00 08 00  # call handle_syscall_chdir
 CF                    # iret
 
-3C 0F                 # cmp eax, F
-75 03                 # jne try next
-31 C0                 # xor eax, eax  ; chmod ok
-CF                    # iret
-
 3C 13                 # cmp eax, 0x13
 75 08                 # jne try next
 9A B7 83 00 00 08 00  # call handle_syscall_lseek
 CF                    # iret
 
 3C 2D                 # cmp eax, 2D
-75 07                 # jne ret
+75 08                 # jne syscall_ok
 9A 61 81 00 00 08 00  # call handle_syscall_brk
 CF                    # iret
 
+#:syscall_ok
+# assume ok for close, chmod, access
+31 C0                 # xor eax, eax
+CF                    # iret
+
+# spare bytes
+90 90 90 90 90 90 90 90 90 90 90
 
 #----------------------------------------
 #[7FA7][04]
