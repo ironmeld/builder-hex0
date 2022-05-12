@@ -54,10 +54,12 @@ The Makefile does this:
 3. Write the shell script for your build directly on partition 4 of the disk image
     * Partition 4 starts at sector 8 which is byte offset 3584 of the disk
     * The script must be zero terminated, so the maximum length is the image size minus 3585 bytes
-    * See self-test.sh for guidance
+    * See build.sh for guidance
 4. Launch the PC with the disk image
 5. Wait until the machine reboots
 6. The disk image itself is the result of the build
+
+Why put the source on partition 4? The idea was to reserve partitions 1 to 3 for writing a boot partition, another file system, and perhaps a partition for logs. The idea is that could change the partition sizes and allow writing to any of them (e.g. /dev/hda1). But that flexibility is not currently implemented. Currently, you can only write back to the disk as a whole by writing to "/dev/hda".
 
 
 ## Machine Requirements
