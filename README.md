@@ -59,7 +59,7 @@ The Makefile does this:
 5. Wait until the machine reboots
 6. The disk image itself is the result of the build
 
-Why put the source on partition 4? The idea was to reserve partitions 1 to 3 for writing a boot partition, another file system, and perhaps a partition for logs. The idea is that could change the partition sizes and allow writing to any of them (e.g. /dev/hda1). But that flexibility is not currently implemented. Currently, you can only write back to the disk as a whole by writing to "/dev/hda".
+Why put the source on partition 4? The idea was to reserve partitions 1 to 3 for writing a boot partition, another file system, and perhaps a partition for logs. The idea is that you could resize the partitions to meet your requirements (by altering the partition table in the MBR) and the kernel would support writing to any of the partitions (e.g. /dev/hda1). But that flexibility is not currently implemented. Currently, you can only write back to the disk as a whole by writing to "/dev/hda".
 
 
 ## Machine Requirements
