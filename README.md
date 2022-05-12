@@ -83,7 +83,7 @@ Essentially, the kernel starts by executing the equivalent of this command:
 cat /dev/hda4 | internalshell
 ```
 
-The internal shell includes two build-in commands:
+The internal shell includes two built-in commands:
 * src: create source file from stdin.
 * hex0: compile hex0 file to binary file.
 
