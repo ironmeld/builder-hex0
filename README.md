@@ -87,7 +87,7 @@ The internal shell includes two built-in commands:
 * src: create source file from stdin.
 * hex0: compile hex0 file to binary file.
 
-The internal shell will also execute any file that has previously been written (by hex0). Note that the internal shell only supports parsing exactly one argument that it will pass to the command. This is enough to support executing a new shell and passing it the name of a shell script to run.
+The internal shell is also able to execute any file that has previously been written (by hex0). Note that the internal shell only supports parsing exactly one argument that it will pass to the command. This is enough to support executing a new shell and passing it the name of a shell script to run.
 
 
 ### The src command
