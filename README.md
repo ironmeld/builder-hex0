@@ -93,13 +93,13 @@ The internal shell is also able to execute any file that has previously been wri
 ### The src command
 
 ```
-src $number_of_lines $filename 
+src $number_of_bytes $filename
 ```
-Read N lines from standard input and write to a file.
+Read N bytes from standard input and write to a file.
 
 Example:
 ```
-src 4 foo.hex0
+src 27 foo.hex0
 45 23 23
 23 45
 53 55

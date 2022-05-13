@@ -426,7 +426,7 @@ BD 0F FF 1F 00        # mov ebp, 0x1FFFF0
 89 EC                 # mov esp, ebp
 
 9A 7C 7D 00 00 08 00  # call setup_interrupt_handlers
-EA D0 86 00 00 08 00  # jmp internalshell
+EA B4 86 00 00 08 00  # jmp internalshell
 
 
 #----------------------------------------
@@ -1554,31 +1554,7 @@ CD 80                 # int 80 syscall
 CB                    # ret
 
 
-#[843C][0F]
-#:read_line(ebx=file, edi=linemem)
-50                    # push eax
-9A FA 83 00 00 08 00  # call read
-AA                    # stosb
-3C 0A                 # cmp al, '\n'
-75 F4                 # jne read_line
-58                    # pop eax
-CB                    # ret
-
-
-#[844B][0F]
-#:write_line(ebx=file, esi=linemem)
-50                    # push eax
-#write_char
-AC                    # lodsb
-9A 1D 84 00 00 08 00  # call write
-3C 0A                 # cmp al, '\n'
-75 F4                 # jne write_char
-
-58                    # pop eax
-CB                    # ret
-
-
-#[845A][04]
+#[843C][04]
 #s  r  c \0
 73 72 63 00
 
@@ -1589,8 +1565,8 @@ CB                    # ret
 # Read a space.
 # Then, read a file name to create.
 # Read a newline.
-# Then, read N lines from stdin and write to the new file.
-#[845E]
+# Then, read N bytes from stdin and write to the new file.
+#[8440]
 #:src
 50                    # push eax
 53                    # push ebx
@@ -1599,7 +1575,7 @@ CB                    # ret
 56                    # push esi
 57                    # push edi
 
-BE 5A 84 00 00        # mov esi,  "src"
+BE 3C 84 00 00        # mov esi,  "src"
 9A CE 7E 00 00 08 00  # call console_puts
 
 9A FA 83 00 00 08 00  # call read 'r'
@@ -1657,17 +1633,18 @@ B9 41 02 00 00        # mov ecx, 0x00000241 O_TRUNC (0x200) | O_CREAT (0x40) | O
 BA 80 01 00 00        # mov edx, 0x00000180 S_IRUSR (0x100) | S_IWUSR (0x80)
 CD 80                 # int 80
 59                    # pop ecx
+89 C2                 # mov edx, eax
 
-# eax has the open file number
+# edx has the open file number
 
 # readwrite_loop:
 BF 00 00 30 00        # mov edi, 0x00300000     ; io buffer
 57                    # push edi                ; save buffer address
 31 DB                 # xor ebx, ebx            ; ebx=0=stdin
-9A 3C 84 00 00 08 00  # call read_line
-89 C3                 # mov ebx, eax            ;  prepare to write
+9A FA 83 00 00 08 00  # call read
+89 D3                 # mov ebx, edx            ;  prepare to write
 5E                    # pop esi                 ; restore buffer address to esi
-9A 4B 84 00 00 08 00  # call write_line
+9A 1D 84 00 00 08 00  # call write
 49                    # dec ecx   ; count--
 75 E4                 # jnz read_write_loop
 
@@ -1682,17 +1659,17 @@ CB                    # ret
 
 
 #------------------------------------------------------------
-#[8510][05]
+#[84F4][05]
 #h  e  x  0 \0
 68 65 78 30 00
 
 #:hex0
-#[8515]
+#[84F9]
 53                    # push ebx
 56                    # push esi
 57                    # push edi
 
-BE 10 85 00 00        # mov esi,  "hex0"
+BE F4 84 00 00        # mov esi,  "hex0"
 9A CE 7E 00 00 08 00  # call console_puts
 
 # read "ex0 '
@@ -1754,7 +1731,7 @@ CD 80                 # int 80
 31 DB                 # xor ebx, ebx
 
 
-#[85A8]
+#[858C]
 #:read_loop
 53                    # push ebx
 89 CB                 # mov ebx, ecx
@@ -1842,20 +1819,20 @@ EB A3                 # jmp read_loop
 5B                    # pop ebx
 
 31 DB                 # xor bx, bx
-EA A8 85 00 00 08 00  # jmp read_loop
+EA 8C 85 00 00 08 00  # jmp read_loop
 
 
-#[861D]
+#[8601]
 #[cmd_args]
 00 00 20 00
 00 04 20 00
-#[8625]
+#[8609]
 #[cmd_env]
 00 00 00 00
 
 #------------------------------------------------------------
 #:handle_other_command
-#[8629]
+#[860D]
 50                    # push eax
 53                    # push ebx
 51                    # push ecx
@@ -1900,8 +1877,8 @@ BE 00 04 20 00        # mov esi, arg1
 9A CE 7E 00 00 08 00  # call console_puts
 
 BB 00 00 20 00        # mov ebx, program_name
-B9 1D 86 00 00        # mov ecx, cmd_args
-BA 25 86 00 00        # mov edx, cmd_env
+B9 01 86 00 00        # mov ecx, cmd_args
+BA 09 86 00 00        # mov edx, cmd_env
 9A FF 81 00 00 08 00  # call handle_syscall_execve
 
 5E                    # pop esi
@@ -1912,19 +1889,19 @@ BA 25 86 00 00        # mov edx, cmd_env
 CB
 
 
-#[86A1][10]
+#[8685][10]
 #B  u  i  l  d     f  i  n  i  s  h  e  d  . \0
 42 75 69 6C 64 20 66 69 6E 69 73 68 65 64 2E 00
 
-#[86B1][16]
+#[8695][16]
 #E  R  R  O  R  :     n  o     h  d  a     w  r  i  t  e  s  ! \0
 45 52 52 4F 52 3A 20 6E 6F 20 68 64 61 20 77 72 69 74 65 73 21 00
 
-#[86C7]
+#[86AB]
 #/  d  e  v  /  h  d  a \0
 2F 64 65 76 2F 68 64 61 00
 
-#[86D0]
+#[86B4]
 # ------------------------------------------------------------
 # Main Program Body
 # ------------------------------------------------------------
@@ -1953,7 +1930,7 @@ B8 04 00 00 00        # mov eax, 4
 75 09                 # jne check_hex0
 
 #handle_src_command
-9A 5E 84 00 00 08 00  # call src
+9A 40 84 00 00 08 00  # call src
 EB E8                 # jmp process_command
 
 #check_hex0_command
@@ -1961,25 +1938,25 @@ EB E8                 # jmp process_command
 75 09                 # jne handle_other_command
 
 #handle_hex0_command
-9A 15 85 00 00 08 00  # call hex0
+9A F9 84 00 00 08 00  # call hex0
 EB DB                 # jmp process_command
 
 #handle_other_command:
-9A 29 86 00 00 08 00  # call handle_other_command
+9A 0D 86 00 00 08 00  # call handle_other_command
 EB D2                 # jmp process_command
 
 #finish
-BE A1 86 00 00        # mov esi, "Build finished."
+BE 85 86 00 00        # mov esi, "Build finished."
 9A CE 7E 00 00 08 00  # call console_puts
 
 # copy memory file /dev/hda to the boot disk
-BB C7 86 00 00        # mov ebx, "/dev/hda"
+BB AB 86 00 00        # mov ebx, "/dev/hda"
 9A 98 80 00 00 08 00  # call find_file
 83 f8 ff              # cmp eax, -1
 75 17                 # jne ok_exit
 
 #:error_exit
-BE B1 86 00 00        # mov esi, "ERROR: No hda writes!"
+BE 95 86 00 00        # mov esi, "ERROR: No hda writes!"
 9A CE 7E 00 00 08 00  # call console_puts
 
 # one space to flush last line
@@ -2031,14 +2008,16 @@ B0 20                 # mov al, 20
 9A AE 7E 00 00 08 00  # call console_putc
 
 #:reboot
-E8 47 F6 FF FF        # call enter_16bit_real, next=[87BF]
+E8 63 F6 FF FF        # call enter_16bit_real, next=[87A3]
 FA                    # cli
 EA F0 FF 00 F0        # ljmp $F000:FFF0          ; reboot
 
 # END
 
-#[87C5]
-               00 00 00 00 00 00 00 00 00 00 00
+#[87A9]
+                           00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 #[87D0]
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
