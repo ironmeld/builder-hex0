@@ -786,7 +786,7 @@ CF                    # iret
 
 #[7FAB][04]
 # next_file_address
-00 00 00 0A
+00 00 50 00
 
 #[7FAF][20]
 #:handle_syscall_open(ebx=filename, ecx=flags)
