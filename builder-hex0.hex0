@@ -1962,7 +1962,7 @@ BE 95 86 00 00        # mov esi, "ERROR: No hda writes!"
 # one space to flush last line
 B0 20                 # mov al, 20
 9A AE 7E 00 00 08 00  # call console_putc
-EB 6E                 # jmp reboot
+EB 62                 # jmp reboot
 
 # ok_exit
 # get file address to read
