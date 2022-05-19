@@ -60,26 +60,34 @@
 
 #------------------------------------------------------------
 # Memory:
-#4000000 -        processes
-# 500000 -3FFFFFF files
-# 401800 - 4FFC00 file names 6..1023
-# 401400 - 4017FF file name 5
-# 401000 - 4013FF file name 4
-# 400010 - 400FF0 file lengths 4*1022
-# 300000 - 3FFFFF io buffers/free
-# 200800 - 2FFFFF cmd arg3..1024 (1022 args * 1K)
-# 200400 - 2007FF cmd arg2 (1K)
-# 200000 - 2003FF cmd arg1 (1K)
-# 100000 - 1FFFF0 32 bit stack (1M)
-#  9FC00 -  FFFFF BIOS
-#  40000 -  9FBFF device buffers
-#  20000 -  3FFFF process descriptors
-#  10800 -  1FFFF opened file descriptors (16 bytes each)
-#  10000 -  10800 interrupt table
-#   A000 -   A1FF sector read buffer - 16bit
-#   7C00 -   8600 code
-#   7B00 -   7BFF Saved 32 bit registers while in 16 bit mode
-# < 7B00          real mode stack
+# 08048000 -          current running process
+# 07800000 - 08047FFF unused
+# 06A00000 - 077FFFFF process 4 (saved, env, args)
+# 05C00000 - 069FFFFF process 3 (saved, env, args)
+# 05B00000 - 05BFFFFF args to process 2 (4096 * 256 each)
+# 05A00000 - 05AFFFFF envs to process 2 (4096 * 256 each)
+# 04E00000 - 059FFFFF saved memory of process 2
+# 04D00000 - 04DFFFFF args to process 1 (not used)
+# 04C00000 - 04CFFFFF envs to process 1 (not used)
+# 04000000 - 04BFFFFF saved memory of process 1
+#   500000 -  3FFFFFF files
+#   401800 -   4FFC00 file names 6..1023
+#   401400 -   4017FF file name 5
+#   401000 -   4013FF file name 4
+#   400010 -   400FF0 file lengths (4*1020) (starting at #4)
+#   300000 -   40000F io buffers/free
+#   200400 -   2FFFFF unused
+#   200000 -   2003FF arg1 for process 1 (1K)
+#   100000 -   1FFFF0 32 bit stack (1M)
+#    9FC00 -    FFFFF BIOS
+#    40000 -    9FBFF device buffers
+#    20000 -    3FFFF process descriptors
+#    10800 -    1FFFF opened file descriptors (16 bytes each)
+#    10000 -    10800 interrupt table
+#     A000 -     A1FF sector read buffer - 16bit
+#     7C00 -     8600 code
+#     7B00 -     7BFF Saved 32 bit registers while in 16 bit mode
+#   < 7B00            real mode stack
 #------------------------------------------------------------
 
 
@@ -1298,7 +1306,7 @@ AA                    # stosb
 8B 30                 # mov esi, [eax]           ; esi = pproc_descriptor->process_address
 58                    # pop eax                  ; restore current process num
 69 f8 00 00 E0 00     # imul edi, eax, 0xE00000
-81 C7 00 00 30 01     # add edi, 0x1300000
+81 C7 00 00 20 03     # add edi, 0x3200000
 B9 00 00 C0 00        # mov ecx, 0x00C00000      ; memory per process
 F3 A4                 # rep movsb
 40                    # inc eax                  ; eax = new process id
@@ -1427,7 +1435,7 @@ C1 E0 09              # shl eax, 09
 
 8B 38                 # mov edi, [eax]           ; edi = pproc_descriptor->process_address
 69 F3 00 00 E0 00     # imul esi, ebx, 0xE00000
-81 C6 00 00 30 01     # add esi, 0x1300000
+81 C6 00 00 20 03     # add esi, 0x3200000
 B9 00 00 C0 00        # mov ecx, 0x00C00000      ; memory per process
 F3 A4                 # rep movsb
 

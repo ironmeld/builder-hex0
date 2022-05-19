@@ -164,21 +164,30 @@ The kernel "simulates" a spawn pattern with this pattern:
 
 * The source script cannot exceed 1M bytes. This can be increased in build.sh.
 * Total system memory is limited to 256M bytes. This can be increased in build.sh.
-* Only 1024 files can be created.
+
+* Only 1020 files can be created.
 * The total size of all files cannot exceed 61,865,983 bytes.
 * A file name is limited to 1K bytes.
 * Opening an existing file for write creates a new (empty) file with the same name.
     * Only the most recent file with the same name can be opened for read.
+* Absolute paths (starting with /) are not honored from subdirectories. (The cwd is always prefixed to a path.)
+    * So, if you are writing to /dev/hda, you must open it from the top directory.
+    * Or you can hack around this using a path like ..//dev/hda
+* All processes share the same file descriptors (i.e. current read and write locations)
+
+* Only one argument is parsed for processes launched by the internal shell
+* A process launched by the internalshell cannot start with 's' or 'h'
+* Process arguments can only be 255 bytes long + 1 terminating zero byte
 * Only one child can be forked at a time.
+* The maximum depth of nested fork/execve is 5 total processes (which does not include the internalshell)
+* waitpid returns zero from the child, regardless of the child's actual exit code.
+
 * Unimplemented syscalls always succeed (eax = 0).
     * mkdir always succeeds, but does nothing.
     * chdir always succeeds, regardless of whether the directory was previously created or not.
     * access always succeeeds, regardless of whether the file or directory exists.
     * chmod permissions are not saved or checked.
-* waitpid returns zero from the child, regardless of the child's actual exit code.
-* Absolute paths (starting with /) are not honored from subdirectories. (The cwd is always prefixed to a path.)
-    * So, if you are writing to /dev/hda, you must open it from the top directory.
-    * Or you can hack around this using a path like ..//dev/hda
+
 * Violating a limit will likely result in a random, mysterious failure or crash.
 
 
