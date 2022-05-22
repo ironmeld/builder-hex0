@@ -79,7 +79,7 @@ builder-hex0-seed.bin: builder-hex0.hex0
 
 
 clean:
-	rm -f *.bin *.img *.src *.log
+	rm -f -- *.bin *.img *.src *.log
 
 # Make does not check whether PHONY targets already exist as files or dirs.
 # It just invokes their recipes when they are targeted, no questions asked.
