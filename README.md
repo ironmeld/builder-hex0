@@ -136,6 +136,7 @@ The following system calls are implemented to some extent:
 * brk
 * chdir
 * access
+* mkdir
 
 
 ## Hacks
