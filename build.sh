@@ -17,7 +17,7 @@ dd if=/dev/zero of="$IMG" bs=512 count=2056
 dd if="$BIN" of="$IMG" bs=512 conv=notrunc
 
 # Apply source
-dd if="$SRC" of="$IMG" bs=512 seek=8 conv=notrunc
+dd if="$SRC" of="$IMG" bs=512 seek=6 conv=notrunc
 
 # Launch build
 qemu-system-x86_64 -m 256M -nographic -drive file="$IMG",format=raw --no-reboot | tee "$LOG"

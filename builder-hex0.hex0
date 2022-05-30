@@ -46,6 +46,8 @@
 # handle_syscall_chdir
 # handle_syscall_exit
 # handle_syscall_lseek
+# handle_syscall_access
+# handle_syscall_mkdir
 #
 # strcmp
 #
@@ -549,7 +551,7 @@ DA
 # status inactive
 00
 # first head,sector[0..5]+cylinder[8..9],cylinder[0..7]
-00 09 00
+00 07 00
 # type "non-fs data"
 DA
 # last head,sector[0..5]+cylinder[8..9],cylinder[0..7]

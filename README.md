@@ -52,8 +52,8 @@ The Makefile does this:
 1. Convert builder-hex0.hex0 to binary using a method you trust
 2. Append zero bytes to the image in multiples of 512 bytes (sectors)
 3. Write the shell script for your build directly on partition 4 of the disk image
-    * Partition 4 starts at sector 8 which is byte offset 3584 of the disk
-    * The script must be zero terminated, so the maximum length is the image size minus 3585 bytes
+    * Partition 4 starts at sector 8 which is byte offset 3072 of the disk
+    * The script must be zero terminated, so the maximum length is the image size minus 3072 bytes
     * See build.sh for guidance
 4. Launch the PC with the disk image
 5. Wait until the machine reboots
@@ -184,9 +184,7 @@ The kernel "simulates" a spawn pattern with this pattern:
 * waitpid returns zero from the child, regardless of the child's actual exit code.
 
 * Unimplemented syscalls always succeed (eax = 0).
-    * mkdir always succeeds, but does nothing.
     * chdir always succeeds, regardless of whether the directory was previously created or not.
-    * access always succeeeds, regardless of whether the file or directory exists.
     * chmod permissions are not saved or checked.
 
 * Violating a limit will likely result in a random, mysterious failure or crash.
