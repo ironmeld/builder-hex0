@@ -6,18 +6,18 @@ BIN="$1"
 SRC="$2"
 ARTIFACT="$3"
 
-IMG=builder-hex0.img
+IMG="builder-hex0.img"
+INPUT="input.bin"
 LOG="build.log"
-
 
 # Create empty disk image for up to 1M of source
 dd if=/dev/zero of="$IMG" bs=512 count=2056
 
-# Add binary boot sectors
-dd if="$BIN" of="$IMG" bs=512 conv=notrunc
+# Append builder binary with source to create input
+cat "$BIN" "$SRC" > "$INPUT"
 
-# Apply source
-dd if="$SRC" of="$IMG" bs=512 seek=6 conv=notrunc
+# Place input at the beginning of disk input
+dd if="$INPUT" of="$IMG" conv=notrunc
 
 # Launch build
 qemu-system-x86_64 -m 256M -nographic -drive file="$IMG",format=raw --no-reboot | tee "$LOG"
