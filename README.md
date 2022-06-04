@@ -166,7 +166,7 @@ The kernel "simulates" a spawn pattern with this pattern:
 * The source script cannot exceed 1M bytes. This can be increased in build.sh.
 * Total system memory is limited to 256M bytes. This can be increased in build.sh.
 
-* Only 1020 files can be created.
+* Only 3068 files can be created.
 * The total size of all files cannot exceed 61,865,983 bytes.
 * A file name is limited to 1K bytes.
 * Opening an existing file for write creates a new (empty) file with the same name.
@@ -180,7 +180,8 @@ The kernel "simulates" a spawn pattern with this pattern:
 * A process launched by the internalshell cannot start with 's' or 'h'
 * Process arguments can only be 255 bytes long + 1 terminating zero byte
 * Only one child can be forked at a time.
-* The maximum depth of nested fork/execve is 5 total processes (which does not include the internalshell)
+* The maximum depth of nested fork/execve is 6 total processes (which does not include the internalshell)
+* When a parent spawns a child, (only) an 8MB snapshot of the parent process is set aside
 * waitpid returns zero from the child, regardless of the child's actual exit code.
 
 * Unimplemented syscalls always succeed (eax = 0).

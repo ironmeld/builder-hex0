@@ -10,8 +10,8 @@ IMG="builder-hex0.img"
 INPUT="input.bin"
 LOG="build.log"
 
-# Create empty disk image for up to 1M of source
-dd if=/dev/zero of="$IMG" bs=512 count=2056
+# Create empty 504MB disk image
+dd if=/dev/zero of="$IMG" bs=512 count=2048006
 
 # Append builder binary with source to create input
 cat "$BIN" "$SRC" > "$INPUT"
@@ -20,7 +20,7 @@ cat "$BIN" "$SRC" > "$INPUT"
 dd if="$INPUT" of="$IMG" conv=notrunc
 
 # Launch build
-qemu-system-x86_64 -m 256M -nographic -drive file="$IMG",format=raw --no-reboot | tee "$LOG"
+qemu-system-x86_64 -m 2G -nographic -drive file="$IMG",format=raw --no-reboot | tee "$LOG"
 
 # Extract the result
 HEXLEN=$(tail -1 "$LOG" | tr -d '\r')

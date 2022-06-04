@@ -60,31 +60,43 @@
 
 #------------------------------------------------------------
 # Memory:
-# 08048000 -          current running process (expected)
-# 07800000 - 08047FFF unused
-# 06A00000 - 077FFFFF process 4 (saved mem, env, args)
-# 05C00000 - 069FFFFF process 3 (saved mem, env, args)
-# 05B00000 - 05BFFFFF args to process 2 (4096 * 256 each)
-# 05A00000 - 05AFFFFF envs to process 2 (4096 * 256 each)
-# 04E00000 - 059FFFFF saved memory of process 2
-# 04D00000 - 04DFFFFF args to process 1 (not used)
-# 04C00000 - 04CFFFFF envs to process 1 (not used)
-# 04000000 - 04BFFFFF saved memory of process 1
-#   500000 -  3FFFFFF files
-#   401800 -   4FFC00 file names 6..1023
-#   401400 -   4017FF file name 5
-#   401000 -   4013FF file name 4
-#   400010 -   400FF0 file lengths (4*1020) (starting at #4)
-#   300000 -   40000F io buffers/free
-#   200800 -   2FFFFF unused
-#   200400 -   2007FF arg parsed by internal shell (1K)
-#   200000 -   2003FF arg parsed by internal shell (1K)
+# 50000000 - 7FFFFFFF files (~800MB)
+# 08048000 - 4FFFFFFF current running process (939MB)
+# 07C00000 - 08047FFF unused
+# 07200000 - 07BFFFFF process 6 (saved mem, env, args)
+# 06800000 - 071FFFFF process 5 (saved mem, env, args)
+# 05E00000 - 067FFFFF process 4 (saved mem, env, args)
+# 05400000 - 05DFFFFF process 3 (saved mem, env, args)
+# 05300000 - 053FFFFF args to process 2 (4096 * 256 each)
+# 05200000 - 052FFFFF envs to process 2 (4096 * 256 each)
+# 04A00000 - 051FFFFF saved memory of process 2
+# 04900000 - 049FFFFF args to process 1
+# 04800000 - 048FFFFF envs to process 1 (not used)
+# 04000000 - 047FFFFF saved memory of process 1
+#   500000 - 03FFFFFF unused (was files)
+#   201800 -   4FFFFF file names 6..3072
+#   201400 -   2017FF file name 5
+#   201000 -   2013FF file name 4
+#   200000 -   200FF0 unused
 #   100000 -   1FFFF0 32 bit stack (1M)
 #    9FC00 -    FFFFF BIOS
-#    40000 -    9FBFF device buffers
-#    20000 -    3FFFF process descriptors
-#    10800 -    1FFFF opened file descriptors (16 bytes each)
-#    10000 -    10800 interrupt table
+#    40200 -    9FBFF scratch buffer
+#    40000 -    401FF stdin device buffer
+#    20000 -    3FFFF process descriptors ( 128 * 512 bytes each)
+#                      offset len    description
+#                      0x000  0x004  process address
+#                      0x004  0x004  brk pointer
+#                      0x008  0x004  saved stack pointer (first process only)
+#                      0x00C  0x004  saved stack pointer
+#                      0x010  0x004  forked?
+#                      0x020  0x030  saved top of stack for fork "replay"
+#                      0x100  0x100  current directory
+#    10810 -    1FFFF file descriptors (3967 * 16 bytes each)
+#                      { unused, address, length, current_offset }
+#    10800 -    1080F stdin disk locator
+#                      { cylinder/sector (2 bytes), head (1 byte), unused byte,
+#                        offset (2 bytes), unused }
+#    10000 -    107FF interrupt table
 #     A000 -     A1FF sector read buffer - 16bit
 #     7C00 -     8600 code
 #     7B00 -     7BFF Saved 32 bit registers while in 16 bit mode
@@ -883,7 +895,7 @@ F7 C1 03 00 00 00     # test ecx, 3
 
 # copy filename to new slot
 89 DE                 # mov esi, ebx
-BF 00 00 40 00        # mov edi, 0x0400000
+BF 00 00 20 00        # mov edi, 0x0200000
 A1 BF 7F 00 00        # mov eax, [&next_filenum]
 C1 E0 0A              # shl eax, 0a
 01 C7                 # add edi, eax
@@ -896,7 +908,6 @@ A1 BF 7F 00 00        # mov eax, [&next_filenum]
 C1 E0 04              # shl eax, 04
 01 C7                 # add edi, eax                  ; pfile_descriptor += sizeof(file_descriptor) * next_filenum
 8B 0D C3 7F 00 00     # mov ecx, [next_file_address]
-
 
 89 4F 04              # mov [edi+4], ecx              ; pfile_descriptor->file_addr = ecx
 
@@ -943,7 +954,7 @@ CB                    # ret
 4E                    # dec esi = current process
 C1 E6 09              # shl esi, 09
 81 C6 00 01 02 00     # add esi, 0x0020100       ; pproc_descriptor = &pproc_descriptor[current_process_num].current_dir
-BF 00 00 30 00        # mov edi, 0x00300000      ; io buffer
+BF 00 02 04 00        # mov edi, 0x00040200      ; scratch buffer
 57                    # push edi
 
 #:strcpy_cwd
@@ -1047,7 +1058,7 @@ A1 BF 7F 00 00        # mov eax, [next_filenum]
 #:checkfile
 89 C7                 # mov edi, eax
 C1 E7 0A              # shl edi, 0x0a
-81 C7 00 00 40 00     # add edi, 0x0400000
+81 C7 00 00 20 00     # add edi, 0x0200000
 9A 22 84 00 00 08 00  # call strcmp
 74 0B                 # je find_file_finish
 
@@ -1329,7 +1340,7 @@ A1 19 82 00 00        # mov eax, [next_process_num]
 #:prepare_stack
 # eax=process number to use
 # --- env ---
-69 F8 00 00 E0 00     # imul edi, eax, 0xE00000
+69 F8 00 00 A0 00     # imul edi, eax, 0xA00000
 81 C7 00 00 E0 03     # add edi, 0x03E00000      ; edi = &env_memory[0]
 6A 00                 # push 0                   ; push end of env
 #:push_env_loop
@@ -1348,7 +1359,7 @@ EB EB                 # jmp push_env_loop
 #:end_env_loop
 # --- args ---
 6A 00                 # push 0                   ; push end of args
-69 f8 00 00 E0 00     # imul edi, eax, 0xE00000
+69 f8 00 00 A0 00     # imul edi, eax, 0xA00000
 81 C7 00 00 F0 03     # add edi, 0x03F00000      ; edi = &arg_memory[0]
 
 # count args
@@ -1408,9 +1419,9 @@ AA                    # stosb
 # copy current process image to storage
 8B 30                 # mov esi, [eax]           ; esi = pproc_descriptor->process_address
 58                    # pop eax                  ; restore current process num
-69 f8 00 00 E0 00     # imul edi, eax, 0xE00000
-81 C7 00 00 20 03     # add edi, 0x3200000
-B9 00 00 C0 00        # mov ecx, 0x00C00000      ; memory per process
+69 f8 00 00 A0 00     # imul edi, eax, 0xA00000
+81 C7 00 00 60 03     # add edi, 0x3600000
+B9 00 00 80 00        # mov ecx, 0x00800000      ; memory per process
 F3 A4                 # rep movsb
 40                    # inc eax                  ; eax = new process id
 
@@ -1537,9 +1548,9 @@ C1 E0 09              # shl eax, 09
 05 00 00 02 00        # add eax, 0x0020000       ; pproc_descriptor = &proc_descriptor[0]
 
 8B 38                 # mov edi, [eax]           ; edi = pproc_descriptor->process_address
-69 F3 00 00 E0 00     # imul esi, ebx, 0xE00000
-81 C6 00 00 20 03     # add esi, 0x3200000
-B9 00 00 C0 00        # mov ecx, 0x00C00000      ; memory per process
+69 F3 00 00 A0 00     # imul esi, ebx, 0xA00000
+81 C6 00 00 60 03     # add esi, 0x3600000
+B9 00 00 80 00        # mov ecx, 0x00800000      ; memory per process
 F3 A4                 # rep movsb
 
 8B 60 0C              # mov esp, [eax+0xc]       ; restore stack pointer
@@ -1747,7 +1758,7 @@ EB E9                 # jmp parse_line_count_loop
 # clear arguments
 51                    # push ecx
 31 C0                 # xor eax, eax
-BA 00 00 20 00        # mov edx, 0x00200000
+BA 00 00 D0 04        # mov edx, 0x04D00000
 B9 00 08 00 00        # mov ecx, 0x00000800
 
 #:src_args_zeroloop
@@ -1758,7 +1769,7 @@ B9 00 08 00 00        # mov ecx, 0x00000800
 59                    # pop ecx
 
 51                    # push ecx
-B9 00 00 20 00        # mov ecx, 0x00200000
+B9 00 00 D0 04        # mov ecx, 0x04D00000
 #:get_filename_loop
 9A 3F 84 00 00 08 00  # call read
 
@@ -1770,12 +1781,12 @@ EB F0                 # jmp get_file_name_loop
 59                    # pop ecx
 
 #:got_filename
-BE 00 00 20 00        # mov esi, 0x00200000
+BE 00 00 D0 04        # mov esi, 0x04D00000
 9A CE 7E 00 00 08 00  # call console_puts
 
 # open filename for write
 51                    # push ecx
-BB 00 00 20 00        # mov ebx, 0x00200000
+BB 00 00 D0 04        # mov ebx, 0x04D00000
 B8 05 00 00 00        # mov eax, 5  ; syscall_open
 B9 41 02 00 00        # mov ecx, 0x00000241 O_TRUNC (0x200) | O_CREAT (0x40) | O_WRONLY (0x1)
 BA 80 01 00 00        # mov edx, 0x00000180 S_IRUSR (0x100) | S_IWUSR (0x80)
@@ -1788,7 +1799,7 @@ CD 80                 # int 80
 #:readwrite_loop
 85 C9                 # test ecx, ecx
 74 1C                 # jz src_finish
-BF 00 00 30 00        # mov edi, 0x00300000     ; io buffer
+BF 00 02 04 00        # mov edi, 0x00040200     ; scratch buffer
 57                    # push edi                ; save buffer address
 31 DB                 # xor ebx, ebx            ; ebx=0=stdin
 9A 3F 84 00 00 08 00  # call read
@@ -1834,7 +1845,7 @@ FE C9                 # dec cl
 
 # clear arguments
 31 C0                 # xor eax, eax
-BA 00 00 20 00        # mov edx, 0x00200000
+BA 00 00 D0 04        # mov edx, 0x04D00000
 B9 00 08 00 00        # mov ecx, 0x00000800
 #:hex0_args_zeroloop
 88 02                 # mov [edx], al
@@ -1842,7 +1853,7 @@ B9 00 08 00 00        # mov ecx, 0x00000800
 49                    # dec ecx
 75 FA                 # jnz hex0_args_zeroloop
 
-BA 00 00 20 00        # mov edx, 0x00200000
+BA 00 00 D0 04        # mov edx, 0x04D00000
 #:get_file_name1_loop
 9A 3F 84 00 00 08 00  # call read
 9A AE 7E 00 00 08 00  # call console_putc
@@ -1853,7 +1864,7 @@ BA 00 00 20 00        # mov edx, 0x00200000
 EB E9                 # jmp get_file_name1_loop
 
 #:got_filename1
-BA 00 04 20 00        # mov edx, 0x00200400
+BA 00 04 D0 04        # mov edx, 0x04D00400
 #:get_file_name2_loop
 9A 3F 84 00 00 08 00  # call read
 9A AE 7E 00 00 08 00  # call console_putc
@@ -1864,7 +1875,7 @@ BA 00 04 20 00        # mov edx, 0x00200400
 EB E9                 # jmp get_file_name2_loop
 
 # open filename1 for read
-BB 00 00 20 00        # mov ebx, 0x00200000
+BB 00 00 D0 04        # mov ebx, 0x04D00000
 B8 05 00 00 00        # mov eax, 5  ; syscall_open
 B9 00 00 00 00        # mov ecx, 0x00000000
 CD 80                 # int 80
@@ -1872,7 +1883,7 @@ CD 80                 # int 80
 50                    # push eax  ; save read filenum
 
 # open filename2 for write
-BB 00 04 20 00        # mov ebx, 0x00200400
+BB 00 04 D0 04        # mov ebx, 0x04D00400
 B8 05 00 00 00        # mov eax, 5  ; syscall_open
 B9 41 02 00 00        # mov ecx, 0x00000241 O_TRUNC (0x200) | O_CREAT (0x40) | O_WRONLY (0x1)
 BA 80 01 00 00        # mov edx, 0x00000180 S_IRUSR (0x100) | S_IWUSR (0x80)
@@ -1978,8 +1989,8 @@ EA D5 85 00 00 08 00  # jmp hex0_read_loop
 #------
 #[864A]
 #:cmd_args
-00 00 20 00
-00 04 20 00
+00 00 D0 04
+00 04 D0 04
 
 #------
 #[8652]
@@ -1996,7 +2007,7 @@ EA D5 85 00 00 08 00  # jmp hex0_read_loop
 56                    # push esi
 
 # clear arguments
-BA 00 00 20 00        # mov edx, 0x00200000
+BA 00 00 D0 04        # mov edx, 0x04D00000
 88 02                 # mov [edx], al
 42                    # inc edx
 31 C0                 # xor eax, eax
@@ -2007,7 +2018,7 @@ B9 FF 07 00 00        # mov ecx, 0x000007FF
 49                    # dec ecx
 75 FA                 # jnz other_args_zeroloop
 
-BA 01 00 20 00        # mov edx, 0x00200001
+BA 01 00 D0 04        # mov edx, 0x04D00001
 #:get_program_name
 9A 3F 84 00 00 08 00  # call read
 3C 20                 # cmp al, ' '
@@ -2017,7 +2028,7 @@ BA 01 00 20 00        # mov edx, 0x00200001
 EB F0                 # jmp get_program_name
 
 #got_program_name
-BA 00 04 20 00        # mov edx, 0x00200400
+BA 00 04 D0 04        # mov edx, 0x04D00400
 #get_argument1_loop
 9A 3F 84 00 00 08 00  # call read
 3C 0A                 # cmp al, '\n'
@@ -2027,13 +2038,13 @@ BA 00 04 20 00        # mov edx, 0x00200400
 EB F0                 # jmp get_argument1_loop
 
 #:got_argument1
-BE 00 00 20 00        # mov esi, program
+BE 00 00 D0 04        # mov esi, program
 9A CE 7E 00 00 08 00  # call console_puts
 
-BE 00 04 20 00        # mov esi, arg1
+BE 00 04 D0 04        # mov esi, arg1
 9A CE 7E 00 00 08 00  # call console_puts
 
-BB 00 00 20 00        # mov ebx, program_name
+BB 00 00 D0 04        # mov ebx, program_name
 B9 4A 86 00 00        # mov ecx, cmd_args
 BA 52 86 00 00        # mov edx, cmd_env
 9A 1D 82 00 00 08 00  # call handle_syscall_execve
