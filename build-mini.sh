@@ -23,6 +23,3 @@ qemu-system-x86_64 -m 256M -nographic -drive file="$IMG",format=raw --no-reboot
 
 # Extract the result
 dd if="$IMG" of="$ARTIFACT" bs=1 count="$ARTIFACT_LEN" status=none
-
-# Remove spent image
-rm -f "$IMG"

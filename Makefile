@@ -30,56 +30,57 @@
 
 
 # The (full) builder-hex0 built by a (full) builder-hex0 (built by the mini builder)
-builder-hex0-self-built.bin: builder-hex0-mini-built.bin builder-hex0.src build.sh
+BUILD/builder-hex0-self-built.bin: BUILD/builder-hex0-mini-built.bin BUILD/builder-hex0.src build.sh | BUILD
 	# params: boot sectors to use, shell source to append, name of binary to extract
-	./build.sh builder-hex0-mini-built.bin builder-hex0.src builder-hex0-self-built.bin
+	(cd BUILD && ../build.sh builder-hex0-mini-built.bin builder-hex0.src builder-hex0-self-built.bin)
 	# verify that the self-built binary is the same as the mini-built binary
-	diff builder-hex0-self-built.bin builder-hex0-mini-built.bin
-	rm -f build.log
+	(cd BUILD && diff builder-hex0-self-built.bin builder-hex0-mini-built.bin)
 
-builder-hex0.src: builder-hex0.hex0 hex0-to-src.sh
-	./hex0-to-src.sh ./builder-hex0.hex0
+BUILD/builder-hex0.src: builder-hex0.hex0 hex0-to-src.sh | BUILD
+	./hex0-to-src.sh ./builder-hex0.hex0 > $@
 
 
 # The "full" builder-hex0 built by the self-built mini builder
-builder-hex0-mini-built.bin: builder-hex0-mini-self-built.bin builder-hex0.hex0 build-mini.sh builder-hex0-seed.bin
+BUILD/builder-hex0-mini-built.bin: BUILD/builder-hex0-mini-self-built.bin builder-hex0.hex0 build-mini.sh BUILD/builder-hex0-seed.bin | BUILD
 	# params: boot sectors to use, source to append, size of binary to extract, name of extracted binary
-	./build-mini.sh builder-hex0-mini-self-built.bin builder-hex0.hex0 3072 builder-hex0-mini-built.bin
+	(cd BUILD && ../build-mini.sh builder-hex0-mini-self-built.bin ../builder-hex0.hex0 3072 builder-hex0-mini-built.bin)
 	# verify that it matches the seed
-	diff builder-hex0-seed.bin builder-hex0-mini-built.bin
+	(cd BUILD && diff builder-hex0-seed.bin builder-hex0-mini-built.bin)
 
 
 # builder-hex0-mini built by the mini builder built by the seed mini bulder
-builder-hex0-mini-self-built.bin: builder-hex0-mini-seed-built.bin builder-hex0-mini.hex0 build-mini.sh
+BUILD/builder-hex0-mini-self-built.bin: BUILD/builder-hex0-mini-seed-built.bin builder-hex0-mini.hex0 build-mini.sh | BUILD
 	# params: boot sectors to use, source to append, size of binary to extract, name of extracted binary
-	./build-mini.sh builder-hex0-mini-seed-built.bin builder-hex0-mini.hex0 512 builder-hex0-mini-self-built.bin
+	(cd BUILD && ../build-mini.sh builder-hex0-mini-seed-built.bin ../builder-hex0-mini.hex0 512 builder-hex0-mini-self-built.bin)
 	# verify that the self-built mini builder is the same as the seed-built binary
-	diff builder-hex0-mini-seed-built.bin builder-hex0-mini-self-built.bin
+	(cd BUILD && diff builder-hex0-mini-seed-built.bin builder-hex0-mini-self-built.bin)
 
 
 # builder-hex0-mini built by the seed mini builder
-builder-hex0-mini-seed-built.bin: builder-hex0-mini-seed.bin builder-hex0-mini.hex0 build-mini.sh
+BUILD/builder-hex0-mini-seed-built.bin: BUILD/builder-hex0-mini-seed.bin builder-hex0-mini.hex0 build-mini.sh | BUILD
 	# params: boot sectors to use, source to append, size of binary to extract, name of binary to extract
-	./build-mini.sh builder-hex0-mini-seed.bin builder-hex0-mini.hex0 512 builder-hex0-mini-seed-built.bin
+	(cd BUILD && ../build-mini.sh builder-hex0-mini-seed.bin ../builder-hex0-mini.hex0 512 builder-hex0-mini-seed-built.bin)
 	# verify that the binary built by the seed binary is the same as the seed binary
-	diff builder-hex0-mini-seed.bin builder-hex0-mini-seed-built.bin
+	(cd BUILD && diff builder-hex0-mini-seed.bin builder-hex0-mini-seed-built.bin)
 
 
 # builder-hex0-mini seed built using command line utilities
-builder-hex0-mini-seed.bin: builder-hex0-mini.hex0
+BUILD/builder-hex0-mini-seed.bin: builder-hex0-mini.hex0 | BUILD
 	# uses cut to strip comments starting with pound or semicolon.
 	# uses xxd to convert hex to binary
-	cut builder-hex0-mini.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > builder-hex0-mini-seed.bin
+	cut builder-hex0-mini.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > BUILD/builder-hex0-mini-seed.bin
 
 # builder-hex0 seed built using command line utilities
-builder-hex0-seed.bin: builder-hex0.hex0
+BUILD/builder-hex0-seed.bin: builder-hex0.hex0 | BUILD
 	# uses cut to strip comments starting with pound or semicolon.
 	# uses xxd to convert hex to binary
-	cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > builder-hex0-seed.bin
+	cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > BUILD/builder-hex0-seed.bin
 
+BUILD:
+	mkdir BUILD
 
 clean:
-	rm -f -- *.bin *.img *.src *.log
+	rm -rf BUILD
 
 # Make does not check whether PHONY targets already exist as files or dirs.
 # It just invokes their recipes when they are targeted, no questions asked.
