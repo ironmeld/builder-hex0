@@ -64,12 +64,14 @@ Why put the source on partition 4? The idea was to reserve partitions 1 to 3 for
 
 ## Machine Requirements
 * x86 32-bit Processor
+* 2GB of memory
 * PC compatible-BIOS
    * Must support int 10h,AH=0Eh (Write character to console)
    * Must support int 13h,AH=02h (Read Sectors)
    * Must support int 13h,AH=03h (Write Sectors)
    * Must support int 13h,AH=08h (Read Drive Parameters)
    * Must support int 15h,0x2401 (A20 activation)
+* Disk large enough to hold kernel and build script with source files
 
 
 ## The Builder Shell
@@ -163,11 +165,8 @@ The kernel "simulates" a spawn pattern with this pattern:
 
 ## Limitations
 
-* The source script cannot exceed 1M bytes. This can be increased in build.sh.
-* Total system memory is limited to 256M bytes. This can be increased in build.sh.
-
 * Only 3068 files can be created.
-* The total size of all files cannot exceed 61,865,983 bytes.
+* The total size of all files cannot exceed 805,306,368 bytes.
 * A file name is limited to 1K bytes.
 * Opening an existing file for write creates a new (empty) file with the same name.
     * Only the most recent file with the same name can be opened for read.
@@ -178,7 +177,7 @@ The kernel "simulates" a spawn pattern with this pattern:
 
 * Only one argument is parsed for processes launched by the internal shell
 * A process launched by the internalshell cannot start with 's' or 'h'
-* Process arguments can only be 255 bytes long + 1 terminating zero byte
+* Each process argument can only be 255 bytes long + 1 terminating zero byte
 * Only one child can be forked at a time.
 * The maximum depth of nested fork/execve is 6 total processes (which does not include the internalshell)
 * When a parent spawns a child, (only) an 8MB snapshot of the parent process is set aside
