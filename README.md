@@ -32,10 +32,18 @@ This kernel is for bootstrapping compilers without having to trust a prebuilt bi
 
 ## Building with make
 
+The build requires qemu-system-x86_64 with kvm enabled.
+
 Run:
 
 ```
 make
+```
+
+If you do not have kvm enabled you can build without it using the following command
+but a larger build will be extremely slow:
+```
+ENABLE_KVM= make
 ```
 
 The Makefile does this:

@@ -9,6 +9,7 @@ ARTIFACT="$3"
 IMG="builder-hex0.img"
 INPUT="input.bin"
 LOG="build.log"
+ENABLE_KVM="${ENABLE_KVM--enable-kvm}"
 
 # Create empty 504MB disk image
 dd if=/dev/zero of="$IMG" bs=512 count=2048006
@@ -20,7 +21,7 @@ cat "$BIN" "$SRC" > "$INPUT"
 dd if="$INPUT" of="$IMG" conv=notrunc
 
 # Launch build
-qemu-system-x86_64 -m 2G -nographic -drive file="$IMG",format=raw --no-reboot | tee "$LOG"
+qemu-system-x86_64 $ENABLE_KVM -m 2G -nographic -drive file="$IMG",format=raw --no-reboot | tee "$LOG"
 
 # Extract the result
 HEXLEN=$(tail -1 "$LOG" | tr -d '\r')
