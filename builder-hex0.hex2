@@ -22,7 +22,6 @@
 # 32 bit Functions
 # ----------------
 # setup_interrupt_handlers
-# [Partition Table]
 # stub_interrupt_handler
 # enter_16bit_real
 # resume_32bit_mode
@@ -30,7 +29,6 @@
 # console_putc
 # console_put_hex
 # console_puts
-# get_partition_start
 # read_sectors
 # write_sectors
 #
@@ -479,14 +477,14 @@ C6 43 05 8E           # mov byte [ebx + 5], flags = 8E
 
 # handle int 80
 BB 00 04 01 00        # mov ebx, &interrupt_table[80]
-66 C7 03 2F 7F        # mov word [ebx + 0], low_address syscall_interrupt_handler
+66 C7 03 D8 7E        # mov word [ebx + 0], low_address syscall_interrupt_handler
 66 C7 43 06 00 00     # mov word [ebx + 6], high_address
 66 C7 43 02 08 00     # mov word [ebx + 2], code_segment = 0x0800
 C6 43 05 8E           # mov byte [ebx + 5], flags = 8E
 
 # load the interrupt table
 FA                    # cli
-0F 01 1D &IDT_locator_32  # lidt [0x00007E00] IDT_locator_32
+0F 01 1D &IDT_locator_32  # lidt IDT_locator_32
 FB                    # sti
 5B                    # pop ebx
 CB                    # retf
@@ -496,76 +494,14 @@ CB                    # retf
 :stub_interrupt_handler
 CF                    # iret
 
-# padding
-00
-
-# Partition entry 1
-# [7DBE]
-# status inactive
-00
-# first head,sector[0..5]+cylinder[8..9],cylinder[0..7]
-00 01 00
-# type non-fs data
-DA
-# last head,sector[0..5]+cylinder[8..9],cylinder[0..7]
-00 00 00
-# LBA start
-00 00 00 00
-# Num sectors
-00 00 00 00
-
-# Partition entry 2
-# [7DCE]
-# status inactive
-00
-# first head,sector[0..5]+cylinder[8..9],cylinder[0..7]
-00 02 00
-# type "non-fs data"
-DA
-# last head,sector[0..5]+cylinder[8..9],cylinder[0..7]
-00 00 00
-# LBA start
-00 00 00 00
-# Num sectors
-00 00 00 00
-
-# Partition entry 3
-# status inactive
-00
-# first head,sector[0..5]+cylinder[8..9],cylinder[0..7]
-00 03 00
-# type "non-fs data"
-DA
-# last head,sector[0..5]+cylinder[8..9],cylinder[0..7]
-00 00 00
-# LBA start
-00 00 00 00
-# Num sectors
-00 00 00 00
-
-# Partition entry 4
-# status inactive
-00
-# first head,sector[0..5]+cylinder[8..9],cylinder[0..7]
-00 07 00
-# type "non-fs data"
-DA
-# last head,sector[0..5]+cylinder[8..9],cylinder[0..7]
-00 00 00
-# LBA start
-00 00 00 00
-# Num sectors
-00 00 00 00
-
-# [7DFE]
-# This is the DOS/MBR identifier at offset 510:
-55 AA
-
 
 #----------------------------------------
 :IDT_locator_32
 FF 07        #  length
 00 00 01 00  #  IDT_start
+
+# unused
+00 00
 
 
 #------------------------------------------------------------
@@ -610,6 +546,11 @@ BC 00 7B              # mov sp, 0x7B00
 # The following far jump sets CS to a 16-bit real mode segment
 # and the segment registers are also set to real mode segments.
 EA &real_mode        # jmp 0000:XXXX  real_mode
+
+# [7DFE]
+# This is the DOS/MBR identifier at offset 510:
+55 AA
+
 #------
 :real_mode
 B8 00 00              # mov ax, 0x0
@@ -620,7 +561,7 @@ B8 00 00              # mov ax, 0x0
 8E C0                 # mov es, ax
 BC 00 7B              # mov sp, 0x7B00
 FA                    # cli
-0F 01 1E 61 7E        # lidt IDT_locator_16
+0F 01 1E 22 7E        # lidt IDT_locator_16
 FB                    # sti
 # Using retf to set CS comes from here:
 # https://stackoverflow.com/questions/26448480/bios-interrupts-in-protected-mode
@@ -649,7 +590,7 @@ A3 08 7B              # mov [0x7B08], ax  ; preserve, they might be return value
 0F 20 C0              # mov eax, cr0
 66 83 C8 01           # or eax, 0x01         ; enable protected mode
 0F 22 C0              # mov cr0, eax
-EA 85 7E 08 00        # jmp restore_32bit
+EA 46 7E 08 00        # jmp restore_32bit
 #------
 :restore_32bit
 B8 10 00 00 00        # mov eax, 0x0010      ; data descriptor
@@ -673,7 +614,7 @@ C3                    # ret
 #------------------------
 :console_putc
 #
-E8 53 FF FF FF  # CALL enter_16bit_real, next=[7EB3]
+E8 51 FF FF FF  # CALL enter_16bit_real, next=[7E74]
 9A &console_putc_16  # CALL console_putc_16(al)
 9A &resume_32bit_mode  # CALL resume_32bit_mode
 CB              # RETF
@@ -681,7 +622,7 @@ CB              # RETF
 
 #------------------------
 :console_put_hex
-E8 43 FF FF FF  # CALL enter_16bit_real, next=[7EC3]
+E8 41 FF FF FF  # CALL enter_16bit_real, next=[7E84]
 9A &console_put_hex_16  # CALL console_put_hex_16(al)
 9A &resume_32bit_mode  # CALL resume_32bit_mode
 CB              # RETF
@@ -709,28 +650,6 @@ CB                    # RETF
 
 
 #------------------------
-:get_partition_start
-# inputs:
-#   eax: partition_num 1..4
-# outputs:
-#   cx: cylinder/sector
-#   dh: head
-#
-50              # PUSH_EAX
-56              # PUSH_ESI
-
-6B C0 10        # imul eax, 0x10
-89 C6           # mov esi, eax         ; esi = entry_offset
-BB AE 7D 00 00  # mov ebx, 7DAE        ; ebx = &partition_table[-1]
-8A 74 33 01     # mov dh, [ebx+esi+1]  ; dh = head = partition_table[al][0]
-66 8B 4C 33 02  # mov cx, [ebx+esi+2]  ; cx = cyl/sector = partition_table[al][1]
-
-5E              # POP_ESI
-58              # POP_EAX
-CB              # retf
-
-
-#------------------------
 :read_sectors
 # inputs:
 #   di: dest_addr
@@ -738,7 +657,7 @@ CB              # retf
 #   dh: head
 #   ax: num_sectors
 #
-E8 FD FE FF FF  # CALL enter_16bit_real, next=[7F09]
+E8 13 FF FF FF  # CALL enter_16bit_real, next=[7EB2]
 9A &read_sectors_16  # CALL read_sectors_16
 9A &resume_32bit_mode  # CALL resume_32bit_mode
 CB              # RETF
@@ -752,14 +671,14 @@ CB              # RETF
 #   dh: head
 #   ax: num_sectors
 #
-E8 ED FE FF FF  # CALL enter_16bit_real, next=[7F19]
+E8 03 FF FF FF  # CALL enter_16bit_real, next=[7EC2]
 9A &write_sectors_16  # CALL write_sectors_16
 9A &resume_32bit_mode  # CALL resume_32bit_mode
 CB              # RETF
 
 #------------------------
 :reboot
-E8 DD FE FF FF        # call enter_16bit_real, next=[7F29]
+E8 F3 FE FF FF        # call enter_16bit_real, next=[7ED2]
 FA                    # cli
 EA F0 FF 00 F0        # ljmp $F000:FFF0          ; reboot
 
@@ -1057,7 +976,7 @@ CB                    # ret
 83 FB 00              # cmp ebx, 0
 75 5F                 # jne read_memfile
 
-# stdin is /dev/hda4
+# stdin disk position is stored in fd 0
 # get current position
 BB 00 08 01 00        # mov ebx, 0x10800
 66 8B 0B              # mov cx, [ebx]
@@ -2016,16 +1935,10 @@ CB
 
 #------------------------------------------------------------
 :internalshell
-# Set up /dev/hda4 as global stdin
-B8 04 00 00 00        # mov eax, 4
-9A &get_partition_start 08 00  # call get_partition_start(4)
-
-# save disk location and byte offset to descriptor
-66 89 0D 00 08 01 00  # mov [0x10800], cx
-88 35 02 08 01 00     # mov [0x10802], dh
+# Start reading stdin from sector 8, cyl 0, head 0
+C7 05 00 08 01 00 07 00 00 00  # mov word [0x010800], 0x00000007
 # start at "end of sector" to trigger an initial sector read
-66 B9 FF 01           # mov cx, 0x01FF
-66 89 0D 04 08 01 00  # mov [0x10804], cx
+66 C7 05 04 08 01 00 FF 01  # mov word [0x010804], 0x01FF
 
 # read from stdin
 31 DB                 # xor ebx, ebx
@@ -2121,5 +2034,12 @@ B0 20                 # mov al, 20
 EA &reboot 08 00  # jmp reboot
 
 # sector padding
-00 00
+00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00

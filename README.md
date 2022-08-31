@@ -57,17 +57,15 @@ The Makefile does this:
 
 ## Manual Build Instructions
 
-1. Convert builder-hex0.hex0 to binary using a method you trust
-2. Append zero bytes to the image in multiples of 512 bytes (sectors)
-3. Write the shell script for your build directly on partition 4 of the disk image
-    * Partition 4 starts at sector 8 which is byte offset 3072 of the disk
-    * The script must be zero terminated, so the maximum length is the image size minus 3072 bytes
-    * See build.sh for guidance
-4. Launch the PC with the disk image
-5. Wait until the machine reboots
-6. The disk image itself is the result of the build
+1. Create a disk image filled with zeros in multiples of 512 bytes.
+2. Convert builder-hex0.hex0 to binary using a method you trust.
+3. Append the build shell script to the binary.
+4. Write the resulting file to the disk image, starting at offset 0.
+5. Launch the PC with the disk image.
+6. Wait until the machine reboots.
+7. The disk image itself is the result of the build.
 
-Why put the source on partition 4? The idea was to reserve partitions 1 to 3 for writing a boot partition, another file system, and perhaps a partition for logs. The idea is that you could resize the partitions to meet your requirements (by altering the partition table in the MBR) and the kernel would support writing to any of the partitions (e.g. /dev/hda1). But that flexibility is not currently implemented. Currently, you can only write back to the disk as a whole by writing to "/dev/hda".
+See build.sh for further guidance on the above instructions.
 
 
 ## Machine Requirements
@@ -86,11 +84,12 @@ Why put the source on partition 4? The idea was to reserve partitions 1 to 3 for
 The builder shell is the first "process" to start although it is really just a function embedded in the kernel.
 
 This internal shell reads commands from standard input.
-The kernel provides this input by reading the contents of the fourth disk partition.
+The kernel provides this input by reading the contents of the disk starting right after the kernel, starting with sector 7,
+which can be thought of as the first partition (/dev/hda1).
 
 Essentially, the kernel starts by executing the equivalent of this command:
 ```
-cat /dev/hda4 | internalshell
+cat /dev/hda1 | internalshell
 ```
 
 The internal shell includes two built-in commands:
