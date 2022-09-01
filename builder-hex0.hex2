@@ -830,41 +830,75 @@ CB                    # ret
 #   ebx: absolute path
 #
 50                    # push eax
+52                    # push edx
 56                    # push esi
 57                    # push edi
+
+BF 00 02 04 00        # mov edi, 0x00040200      ; scratch buffer
+57                    # push edi
+
+# if absolute path, skip prefixing current directory
+80 3b 2f              # cmp [ebx], '/'
+74 18                 # je strcpy_path_arg
 
 # get cwd
 8B 35 &next_process_num     # mov esi, [&next_process_num]
 4E                    # dec esi = current process
 C1 E6 09              # shl esi, 09
 81 C6 00 01 02 00     # add esi, 0x0020100       ; pproc_descriptor = &pproc_descriptor[current_process_num].current_dir
-BF 00 02 04 00        # mov edi, 0x00040200      ; scratch buffer
-57                    # push edi
 
-:strcpy_cwd
+:strcpy_cwd_loop
 AC                    # lodsb
 84 C0                 # test al, al
-74 03                 # jz strcpy_path
+74 03                 # jz strcpy_path_arg
 AA                    # stosb
-EB F8                 # jmp strcpy_cwd
-:strcpy_path
+EB F8                 # jmp strcpy_cwd_loop
+
+:strcpy_path_arg
 89 DE                 # mov esi, ebx
+# skip leading ./
+66 81 3E 2E 2F        # cmp word [esi], 0x2F2E
+75 02                 # jne strcpy_path
+46                    # inc esi
+46                    # inc esi
+
+:strcpy_path
+31 DB                 # xor ebx, ebx            ; init last_char
 :strcpy_path_loop
 AC                    # lodsb
+3C 2F                 # cmp al, '/'
+75 05                 # jne ok_path_char
+80 FB 2F              # cmp bl, '/'
+74 01                 # je skip_extra_slash
+:ok_path_char
 AA                    # stosb
+:skip_extra_slash
 84 C0                 # test al, al
-75 FA                 # jnz strcpy_path_loop
+74 04                 # jz maybe_strip_ending_slash
+88 C3                 # mov bl, al              ; save last_char
+EB ED                 # jmp strcpy_path_loop
+
+:maybe_strip_ending_slash
+80 FB 2F              # cmp bl, '/'
+75 05                 # jne handle_dots
+31 C0                 # xor eax, eax
+4F                    # dec edi
+4F                    # dec edi
+AA                    # stosb
 
 # handle /. and /..
 :handle_dots
+5A                    # pop edx                  ; record first parent
+52                    # push edx
+
+:handle_dots_loop
 5E                    # pop esi                  ; get start location
 56                    # push esi                 ; save start location
-89 F2                 # mov edx, esi             ; save start of parent
 
 ## find_slash
 AC                    # lodsb
 3C 00                 # cmp al, 0
-74 32                 # je strip_front
+74 2E                 # je absolute_path_finish
 3C 2F                 # cmp al, '/'
 75 F7                 # jne find_slash
 
@@ -872,52 +906,49 @@ AC                    # lodsb
 AC                    # lodsb
 # check for /. or /..
 3C 00                 # cmp al, 0
-74 29                 # je strip_front
+74 25                 # je absolute_path_finish
 3C 2E                 # cmp al, '.'
-74 04                 # je dot_or_dotdot
+74 06                 # je dot_or_dotdot
 89 F2                 # mov edx, esi             ; record start of parent
-EB EA                 # jmp find_slash
+4A                    # dec edx                  ; go back to slash
+4A                    # dec edx
+EB E8                 # jmp find_slash
 :dot_or_dotdot
 AC                    # lodsb
 3C 2E                 # cmp al, '.'
-75 10                 # jne remove_dotslash
+75 0A                 # jne remove_slashdot
 
 :remove_parent
 89 D7                 # mov edi, edx
 AC                    # lodsb
-3C 00                 # cmp al, 0
-75 01                 # jne copy_over_parent
-4E                    # dec esi                  ; go back to last
-:copy_over_parent
-AC                    # lodsb
 AA                    # stosb
 3C 00                 # cmp al, 0
 75 FA                 # jne copy
-EB D1                 # jmp handle_dots
+EB D7                 # jmp handle_dots_loop
 
-:remove_dotslash
+:remove_slashdot
 89 F7                 # mov edi, esi
 4F                    # dec edi
 4F                    # dec edi
-:copy_over_dotslash
+:copy_over_slashdot
 AC                    # lodsb
 AA                    # stosb
 3C 00                 # cmp al, 0
-75 FA                 # jne copy_over_dotslash
-EB C5                 # jmp handle_dots
-
-:strip_front
-5B                    # pop ebx
-66 8B 03              # mov ax, [ebx]
-66 3D 2E 2F           # cmp ax, 0x2F2E
-75 03                 # jne absolute_path_finish
-83 C3 02              # add ebx, 2
+75 FA                 # jne copy_over_slashdot
+EB CB                 # jmp handle_dots_loop
 
 :absolute_path_finish
-89 DE                 # mov esi, ebx
+5B                    # pop ebx
 
+# restore / if necessary
+80 3B 00              # cmp byte [ebx], 0
+75 05                 # jne abs_path_done
+66 C7 03 2F 00        # mov word [ebx], 0x002F
+
+:abs_path_done
 5F                    # pop edi
 5E                    # pop esi
+5A                    # pop edx
 58                    # pop eax
 CB
 
@@ -939,16 +970,17 @@ A1 &next_filenum        # mov eax, [next_filenum]
 89 DE                 # mov esi, ebx
 
 :checkfile
+83 F8 03              # cmp eax, 3
+74 17                 # je not_found
 89 C7                 # mov edi, eax
 C1 E7 0A              # shl edi, 0x0a
 81 C7 00 00 20 00     # add edi, 0x0200000
 9A &strcmp 08 00  # call strcmp
-74 0B                 # je find_file_finish
-
+74 08                 # je find_file_finish
 48                    # dec eax
-83 F8 03              # cmp eax, 3
-75 E6                 # jne checkfile
+EB E4                 # jmp checkfile
 
+:not_found
 B8 FF FF FF FF        # mov eax, 0xffffffff
 
 :find_file_finish
@@ -1365,17 +1397,34 @@ C3                    # ret
 57                    # push edi
 
 9A &absolute_path 08 00  # call absolute_path
+9A &find_file 08 00  # call find_file
+83 F8 FF              # cmp eax, -1
+74 3F                 # je chdir_finish
 
+C1 E0 04              # shl eax, 04
+05 08 08 01 00        # add eax, 0x00010808     ; eax = &file_descriptor[filenum].file_length
+83 38 00              # cmp long [eax], 0
+74 07                 # je chdir_ok
+
+# can't chdir to a file
+B8 FF FF FF FF        # mov eax, -1
+EB 2B                 # jmp chdir_finish
+
+:chdir_ok
 89 DE                 # mov esi, ebx
 8B 3D &next_process_num     # mov edi, [&next_process_num]
 4F                    # dec edi = current process
 C1 E7 09              # shl edi, 09
 81 C7 00 01 02 00     # add edi, 0x0020100       ; pproc_descriptor = &pproc_descriptor[current_process_num].current_dir
 
-AC                    # lodsb
-3C 00                 # cmp al, 0
+AC                    # lodsb    ; first slash
 AA                    # stosb
-74 0D                 # je chdir_finish
+AC                    # lodsb
+AA                    # stosb
+3C 00                 # cmp al, 0
+75 04                 # jne chdir_loop
+31 C0                 # xor eax, eax
+74 0D                 # je chdir_finish   ; if "/" don't add slash
 
 #chdir_loop
 AC                    # lodsb
@@ -1939,6 +1988,8 @@ CB
 C7 05 00 08 01 00 07 00 00 00  # mov word [0x010800], 0x00000007
 # start at "end of sector" to trigger an initial sector read
 66 C7 05 04 08 01 00 FF 01  # mov word [0x010804], 0x01FF
+66 C7 05 00 01 02 00 2F 00  # mov [0x00020100], 0x002F     ; proc[0].cwd = "/"
+66 C7 05 00 03 02 00 2F 00  # mov [0x00020300], 0x002F     ; proc[1].cwd = "/"
 
 # read from stdin
 31 DB                 # xor ebx, ebx
@@ -2034,12 +2085,5 @@ B0 20                 # mov al, 20
 EA &reboot 08 00  # jmp reboot
 
 # sector padding
-00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+   00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
