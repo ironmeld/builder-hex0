@@ -84,7 +84,7 @@ See build.sh for further guidance on the above instructions.
 The builder shell is the first "process" to start although it is really just a function embedded in the kernel.
 
 This internal shell reads commands from standard input.
-The kernel provides this input by reading the contents of the disk starting right after the kernel, starting with sector 7,
+The kernel provides this input by reading the contents of the disk starting right after the kernel, starting with sector 8,
 which can be thought of as the first partition (/dev/hda1).
 
 Essentially, the kernel starts by executing the equivalent of this command:
