@@ -46,6 +46,7 @@
 # handle_syscall_lseek
 # handle_syscall_access
 # handle_syscall_mkdir
+# handle_syscall_getcwd
 #
 # strcmp
 #
@@ -58,25 +59,14 @@
 
 #------------------------------------------------------------
 # Memory:
-# 50000000 - 7FFFFFFF files (~800MB)
-# 08048000 - 4FFFFFFF current running process (939MB)
-# 07C00000 - 08047FFF unused
-# 07200000 - 07BFFFFF process 6 (saved mem, env, args)
-# 06800000 - 071FFFFF process 5 (saved mem, env, args)
-# 05E00000 - 067FFFFF process 4 (saved mem, env, args)
-# 05400000 - 05DFFFFF process 3 (saved mem, env, args)
-# 05300000 - 053FFFFF args to process 2 (4096 * 256 each)
-# 05200000 - 052FFFFF envs to process 2 (4096 * 256 each)
-# 04A00000 - 051FFFFF saved memory of process 2
-# 04900000 - 049FFFFF args to process 1
-# 04800000 - 048FFFFF envs to process 1 (not used)
-# 04000000 - 047FFFFF saved memory of process 1
-#   500000 - 03FFFFFF unused (was files)
-#   201800 -   4FFFFF file names 6..3072
+# 60000000 - 7FFFFFFF files (~536MB)
+# 30000000 - 5FFFFFFF saved processes (805MB)
+# 08048000 - 2FFFFFFF current running process (~670MB)
+# 01080000 - 08000000 32 bit stack (117MB)
+#   201800 -   FFFFFF file names 6..14329
 #   201400 -   2017FF file name 5
 #   201000 -   2013FF file name 4
-#   200000 -   200FF0 unused
-#   100000 -   1FFFF0 32 bit stack (1M)
+#   100000 -   200FF0 unused
 #    9FC00 -    FFFFF BIOS
 #    40200 -    9FBFF scratch buffer
 #    40000 -    401FF stdin device buffer
@@ -87,7 +77,13 @@
 #                      0x008  0x004  saved stack pointer (first process only)
 #                      0x00C  0x004  saved stack pointer
 #                      0x010  0x004  forked?
-#                      0x020  0x030  saved top of stack for fork "replay"
+#                      0x014  0x004  saved brk pointer
+#                      0x018  0x004  address of process env/args
+#                      0x01C  0x004  address of saved process memory
+#                      0x020  0x004  length of process memory
+#                      0x024  0x004  address of saved process stack
+#                      0x028  0x004  length of saved process stack
+#                      0x02C  0x01C  unused
 #                      0x100  0x100  current directory
 #    10810 -    1FFFF file descriptors (3967 * 16 bytes each)
 #                      { unused, address, length, current_offset }
@@ -457,7 +453,7 @@ EA 59 7D 08 00        # jmp setup_32bit     ; sets CS
 8E C0                 # mov es, ax
 8E E0                 # mov fs, ax
 8E E8                 # mov gs, ax
-BD 0F FF 1F 00        # mov ebp, 0x1FFFF0
+BD 00 00 00 08        # mov ebp, 0x08000000
 89 EC                 # mov esp, ebp
 
 9A &setup_interrupt_handlers 08 00  # call setup_interrupt_handlers
@@ -765,7 +761,7 @@ CF                    # iret
 
 #------
 :next_file_address
-00 00 00 50
+00 00 00 60
 
 #----------------------------------------
 :handle_syscall_open
@@ -1185,28 +1181,62 @@ EB EB                 # jmp write_loop
 CB                    # ret
 
 
+#------
+:next_save_process_address
+00 00 00 30
+
 #----------------------------------------
 :handle_syscall_fork
+53                    # push ebx
+51                    # push ecx
+52                    # push edx
 56                    # push esi
 57                    # push edi
+55                    # push ebp
 
 A1 &next_process_num        # mov eax, [&next_process_num]
 48                    # dec eax = current process
+89 C2                 # mov edx, eax
 BF 00 00 02 00        # mov edi, 0x0020000       ; pproc_descriptor = &proc_descriptor[0]
 C1 E0 09              # shl eax, 09
 01 C7                 # add edi, eax             ; pproc_descriptor += sizeof(proc_descriptor) * procnum
 
+8b 77 04              # mov esi, [edi+0x4]       ; save brk pointer
+89 77 14              # mov [edi+0x14], esi
 89 E6                 # mov esi, esp
 89 77 0c              # mov [edi+0xC], esi       ; save stack pointer so we can return again later
 FF 47 10              # inc [edi+0x10]           ; fork = true
 
-83 C7 20              # add edi, 0x20
-B9 30 00 00 00        # mov ecx, 0x30
-F3 A5                 # rep movsd                ; save stack
+A1 &next_save_process_address  # mov eax, [next_save_process_address]    ; set save stack location
+89 47 24              # mov [edi+0x24], eax
+
+B9 00 00 00 08        # mov ecx, 0x08000000
+29 F1                 # sub ecx, esi             ; compute save stack length
+01 0D &next_save_process_address  # add [next_save_process_address], ecx
+89 4F 28              # mov [edi+0x28], ecx
+89 C7                 # mov edi, eax
+F3 A4                 # rep movsb                ; save stack
+
+# copy current process image to storage
+89 D0                 # mov eax, edx             ; restore current process num
+C1 E0 09              # shl eax, 09
+05 00 00 02 00        # add eax, 0x0020000
+8B 30                 # mov esi, [eax]           ; esi = pproc_descriptor->process_address
+
+8B 48 14              # mov ecx, [eax+0x14]     ; process_length = brk - process_address
+29 F1                 # sub ecx, esi
+89 78 1C              # mov [eax+0x1C], edi     ; save address of saved process memory
+89 48 20              # mov [eax+0x20], ecx     ; save length of process memory
+01 0D &next_save_process_address  # add [next_save_process_address], ecx
+F3 A4                 # rep movsb                ; copy current process image to storage
 
 31 C0                 # xor eax, eax             ; return as child, we'll return again as parent when child exits
+5D                    # pop ebp
 5F                    # pop edi
 5E                    # pop esi
+5A                    # pop edx
+59                    # pop ecx
+5B                    # pop ebx
 CB                    # ret
 
 
@@ -1221,13 +1251,15 @@ CB                    # ret
 #   ecx: char **args
 #   edx: env
 #
+
 A1 &next_process_num        # mov eax, [next_process_num]
 3C 01                 # cmp al, 1
-75 0A                 # jne not_first_process
+75 11                 # jne not_first_process
 
 # first process
-BD 00 02 02 00        # ebp = &proc_descriptor[1]
+BD 00 02 02 00        # mov ebp, 0x00020200      ; ebp = &proc_descriptor[1]
 89 65 08              # mov [ebp+0x8], esp       ; save original stack pointer before pushing args
+C7 45 18 00 00 00 30  # mov dword [ebp+0x18], 0x30000000   ; save start of env+args
 EB 23                 # jmp prepare_stack
 
 # not_first_process
@@ -1254,8 +1286,7 @@ A1 &next_process_num        # mov eax, [next_process_num]
 :prepare_stack
 # eax=process number to use
 # --- env ---
-69 F8 00 00 A0 00     # imul edi, eax, 0xA00000
-81 C7 00 00 E0 03     # add edi, 0x03E00000      ; edi = &env_memory[0]
+8B 3D &next_save_process_address  # mov edi, [next_save_process_address]
 6A 00                 # push 0                   ; push end of env
 :push_env_loop
 # copy env arg to memory for this process
@@ -1270,12 +1301,10 @@ F3 A4                 # rep movsb                ; copy to new memory
 83 C2 04              # add edx, 4
 EB EB                 # jmp push_env_loop
 
+
 :end_env_loop
 # --- args ---
 6A 00                 # push 0                   ; push end of args
-69 f8 00 00 A0 00     # imul edi, eax, 0xA00000
-81 C7 00 00 F0 03     # add edi, 0x03F00000      ; edi = &arg_memory[0]
-
 # count args
 31 C0                 # xor eax, eax             ; passed_args = 0
 :countloop
@@ -1306,19 +1335,18 @@ F3 A4                 # rep movsb
 89 D0                 # mov eax, edx             ; restore eax
 50                    # push eax = argc
 
-# only save current process if there is one
-A1 &next_process_num        # mov eax, [next_process_num]
-83 F8 01              # cmp eax , 1
-74 37                 # je setup_process_image
-
 # get current process descriptor
+A1 &next_process_num        # mov eax, [next_process_num]
 48                    # dec eax
 50                    # push eax                 ; save current process num
 C1 E0 09              # shl eax, 09
 05 00 00 02 00        # add eax, 0x0020000       ; pproc_descriptor = &proc_descriptor[current_process_num]
 
+8B 35 &next_save_process_address  # mov esi, [next_save_process_address]   ; record start of env+args
+89 B0 18 02 00 00     # mov [eax+0x218], esi
+89 3D &next_save_process_address  # mov [next_save_process_address], edi
+
 # copy cwd from current process
-50                    # push eax
 05 00 01 00 00        # add eax, 0x100
 89 C6                 # mov esi, eax
 05 00 02 00 00        # add eax, 0x200
@@ -1328,34 +1356,37 @@ AC                    # lodsb
 AA                    # stosb
 3C 00                 # cmp al, 0
 75 FA                 # jne loop
-58                    # pop eax
 
-# copy current process image to storage
-8B 30                 # mov esi, [eax]           ; esi = pproc_descriptor->process_address
 58                    # pop eax                  ; restore current process num
-69 f8 00 00 A0 00     # imul edi, eax, 0xA00000
-81 C7 00 00 60 03     # add edi, 0x3600000
-B9 00 00 80 00        # mov ecx, 0x00800000      ; memory per process
-F3 A4                 # rep movsb
 40                    # inc eax                  ; eax = new process id
 
-:setup_process_image
+# prepare process image in memory
 50                    # push eax                 ; save new process id
 # get file address and length
 9A &absolute_path 08 00  # call absolute_path
 9A &find_file 08 00  # call find_file           ; eax=find_file(ebx)
-BA 00 08 01 00        # mov edx, 0x0010800       ; pfile_descriptor = &file_descriptor[0]
-C1 E0 04              # shl eax, 04
-01 C2                 # add edx, eax             ; pfile_descriptor += sizeof(file_descriptor) * filenum
-8B 72 04              # mov esi, [edx+0x4]       ; esi = pfile_descriptor->file_address
-8B 4A 08              # mov ecx, [edx+0x8]       ; ecx = pfile_descriptor->file_length
-8B 7E 3C              # mov edi, [esi + 0x3C]    ; get declared process address
+C1 E0 04              # shl eax, 04              ; pfile_descriptor = sizeof(file_descriptor) * filenum
+05 00 08 01 00        # add eax, 0x00010800      ; pfile_descriptor += &file_descriptors[0]
 
-51                    # push ecx                 ; copy file image to process memory
-57                    # push edi
+8B 40 04              # mov eax, [eax + 0x4]     ; eax = pfile_descriptor->file_address
+89 C3                 # mov ebx, eax             ; save file address
+31 C9                 # xor ecx, ecx
+66 8B 48 2C           # mov cx, [eax + 0x2C]    ; get number of program headers
+8B 50 18              # mov edx, [eax + 0x18]    ; get process entry address
+03 40 1C              # add eax, [eax + 0x1C]    ; calc first program header address
+
+:program_header_loop
+51                    # push ecx                 ; save program header count
+8B 70 04              # mov esi, [eax + 4]       ; get segment file source offset
+01 DE                 # add esi, ebx             ; calc segment file address
+8B 78 08              # mov edi, [eax + 8]       ; get segment memory destination address
+8B 48 10              # mov ecx, [eax + 0x10]    ; get segment length
 F3 A4                 # rep movsb
-5F                    # pop edi
-59                    # pop ecx
+
+83 C0 20              # add eax, 0x20            ; go to next program header
+59                    # pop ecx                  ; restore program header count
+49                    # dec ecx
+75 EB                 # jnz program_header_loop
 
 58                    # pop eax                  ; restore new process num
 
@@ -1366,16 +1397,16 @@ F3 A4                 # rep movsb
 :record_process_address
 C1 E0 09              # shl eax, 09
 05 00 00 02 00        # add eax, 0x0020000       ; pproc_descriptor = &pproc_descriptor[current_process_num]
-89 38                 # mov [eax], edi           ; pproc_descriptor->process_address = edi
+
+03 5B 1C              # add ebx, [ebx + 0x1C]    ; calc first program header address
+8B 5B 08              # mov ebx, [ebx + 0x8]     ; get first segment memory address
+89 18                 # mov [eax], ebx           ; pproc_descriptor->process_address = first segment address
 
 # setup brk
-57                    # push edi
-01 CF                 # add edi, ecx             ; set brk after code
-81 C7 00 01 00 00     # add edi, 0x00010000      ; breathing room
-89 78 04              # mov [eax+4], edi         ; pproc_descriptor->brk
+81 C7 00 00 02 00     # add edi, 0x00020000      ; brk after last segment plus 0x20000
+89 78 04              # mov [eax + 4], edi         ; pproc_descriptor->brk
 31 FF                 # xor edi, edi
-89 78 10              # mov [eax+0x10], edi        ; pproc->forked = false
-5F                    # pop edi
+89 78 10              # mov [eax + 0x10], edi        ; pproc->forked = false
 
 85 ED                 # test ebp, ebp            ; new process (vs overlay)?
 74 06                 # jz after_new_process
@@ -1385,7 +1416,7 @@ FF 05 &next_process_num     # inc [next_process_num]
 
 :after_new_process
 # get entry point and jump
-FF 77 18              # push [edi + 0x18]
+52                    # push edx
 31 C0                 # xor eax, eax
 31 DB                 # xor ebx, ebx
 31 C9                 # xor ecx, ecx
@@ -1456,8 +1487,7 @@ CB                    # retf
 85 C0                 # test eax, eax
 74 02                 # jz okexit
 
-FA                    # cli
-F4                    # hlt
+EB FE  # loop forever
 
 :okexit
 A1 &next_process_num        # mov eax, [&next_process_num]
@@ -1466,33 +1496,41 @@ A3 &next_process_num        # mov [&next_process_num], eax
 48                    # dec eax = parent process
 
 3C 00                 # cmp al, 0
-75 0A                 # jne not_first
+75 07                 # jne not_first
+#first process
 8B 25 08 02 02 00     # mov esp, [0x020208]
-8b 04 24              # mov eax, [esp]
-CB
+CB                    # ret
 
 #not_first
-89 C3                 # mov ebx, eax
 C1 E0 09              # shl eax, 09
 05 00 00 02 00        # add eax, 0x0020000       ; pproc_descriptor = &proc_descriptor[0]
 
 8B 38                 # mov edi, [eax]           ; edi = pproc_descriptor->process_address
-69 F3 00 00 A0 00     # imul esi, ebx, 0xA00000
-81 C6 00 00 60 03     # add esi, 0x3600000
-B9 00 00 80 00        # mov ecx, 0x00800000      ; memory per process
+8B 70 1C              # mov esi, [eax+0x1C]      ; esi = pproc_descriptor->address_of_saved_process_memory
+8B 48 20              # mov ecx, [eax+0x20]      ; ecx = pproc_descriptor->length_of_process_memory
 F3 A4                 # rep movsb
 
-8B 60 0C              # mov esp, [eax+0xc]       ; restore stack pointer
-89 C6                 # mov esi, eax
-83 C6 20              # add esi, 0x20            ; restore top of stack
-89 E7                 # mov edi, esp
-B9 30 00 00 00        # mov ecx, 0x30
-F3 A5                 # rep movsd
+8B 70 24              # mov esi, [eax+0x24]                 ; deallocate memory for saved process
+89 35 &next_save_process_address  #  mov [next_save_process_address], esi
 
-# mimic syscall_fork's finish                    ; go back to parent
+8B 60 0C              # mov esp, [eax+0xc]       ; restore stack pointer
+8B 70 14              # mov esi, [eax+0x14]      ; restore brk pointer
+89 70 04              # mov [eax+0x4], esi
+
+8B 70 24              # mov esi, [eax+0x24]      ; restore stack
+89 E7                 # mov edi, esp
+8B 48 28              # mov ecx, [eax+0x28]
+F3 A4                 # rep movsb
+
+# mimic syscall_fork's finish
+B8 01 00 00 00        # mov eax, 0x1           ; process number for fork
+5D                    # pop ebp
 5F                    # pop edi
 5E                    # pop esi
-CB                    # ret
+5A                    # pop edx
+59                    # pop ecx
+5B                    # pop ebx
+CB                    # ret                    ; go back to parent
 
 
 #----------------------------------------
@@ -2118,13 +2156,7 @@ B0 20                 # mov al, 20
 EA &reboot 08 00  # jmp reboot
 
 # sector padding
-00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+               00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
