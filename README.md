@@ -146,6 +146,8 @@ The following system calls are implemented to some extent:
 * chdir
 * access
 * mkdir
+* wait4
+* getcwd
 
 
 ## Hacks
@@ -172,22 +174,19 @@ The kernel "simulates" a spawn pattern with this pattern:
 
 ## Limitations
 
-* Only 3068 files can be created.
-* The total size of all files cannot exceed 805,306,368 bytes.
+* Only 3967 files can be created.
+* The total size of all files cannot exceed 536,870,911 bytes.
 * A file name is limited to 1K bytes.
 * Opening an existing file for write creates a new (empty) file with the same name.
     * Only the most recent file with the same name can be opened for read.
-* Absolute paths (starting with /) are not honored from subdirectories. (The cwd is always prefixed to a path.)
-    * So, if you are writing to /dev/hda, you must open it from the top directory.
-    * Or you can hack around this using a path like ..//dev/hda
 * All processes share the same file descriptors (i.e. current read and write locations)
 
 * Only one argument is parsed for processes launched by the internal shell
 * A process launched by the internalshell cannot start with 's' or 'h'
 * Each process argument can only be 255 bytes long + 1 terminating zero byte
 * Only one child can be forked at a time.
-* The maximum depth of nested fork/execve is 6 total processes (which does not include the internalshell)
-* When a parent spawns a child, (only) an 8MB snapshot of the parent process is set aside
+* Each process cannot exceed 670,793,728 bytes of memory
+* The total memory for all processes cannot exceed 805,306,368 bytes of memory
 * waitpid returns zero from the child, regardless of the child's actual exit code.
 
 * Unimplemented syscalls always succeed (eax = 0).
