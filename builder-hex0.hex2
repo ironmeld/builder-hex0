@@ -809,10 +809,13 @@ C1 E0 04              # shl eax, 04
 
 A1 &next_filenum        # mov eax, [next_filenum]       ; return next_filenum
 FF 05 &next_filenum     # inc [next_filenum]
-EB 18                 # jmp syscall_open_finish
+EB 1D                 # jmp syscall_open_finish
 
 #open_read
 9A &find_file 08 00  # call find_file
+83 F8 FF              # cmp eax, -1
+74 11                 # je syscall_open_finish
+
 89 C1                 # mov ecx, eax
 # set read offset to start of file
 BE 00 00 00 01        # mov esi, 0x01000000      ; pfile_descriptor = &file_descriptor[0]
@@ -2171,8 +2174,7 @@ B0 20                 # mov al, 20
 EA &reboot 08 00  # jmp reboot
 
 # sector padding
-                                    00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+   00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
