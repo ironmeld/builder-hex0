@@ -63,7 +63,12 @@
 # 30000000 - 5FFFFFFF saved processes (805MB)
 # 08048000 - 2FFFFFFF current running process (~670MB)
 # 01080000 - 08000000 32 bit stack (117MB)
-#   201800 -   FFFFFF file names 6..14329
+# 01000010 - 0107FFFF file descriptors (16 bytes each * 32K)
+#                      { unused, address, length, current_offset }
+# 01000000 - 0100000F stdin disk locator
+#                      { cylinder/sector (2 bytes), head (1 byte), unused byte,
+#                        offset (2 bytes), unused }
+#   201800 -   FFFFFF file names 6..14335
 #   201400 -   2017FF file name 5
 #   201000 -   2013FF file name 4
 #   100000 -   200FF0 unused
@@ -85,11 +90,7 @@
 #                      0x028  0x004  length of saved process stack
 #                      0x02C  0x01C  unused
 #                      0x100  0x100  current directory
-#    10810 -    1FFFF file descriptors (3967 * 16 bytes each)
-#                      { unused, address, length, current_offset }
-#    10800 -    1080F stdin disk locator
-#                      { cylinder/sector (2 bytes), head (1 byte), unused byte,
-#                        offset (2 bytes), unused }
+#    10800 -    1FFFF unused
 #    10000 -    107FF interrupt table
 #     A000 -     A1FF sector read buffer - 16bit
 #     7C00 -     8600 code
@@ -531,7 +532,6 @@ FF 07        #  length
 #
 # 7B00  <- top of real mode stack
 
-
 #----------------------------------------
 #[7DC5]
 #:enter_16bit_real
@@ -829,7 +829,7 @@ B9 00 04 00 00        # mov ecx, 0x0000400
 F3 A4                 # rep movsb
 
 # set address of file
-BF 00 08 01 00        # mov edi, 0x0010800            ; pfile_descriptor = &file_descriptor[0]
+BF 00 00 00 01        # mov edi, 0x01000000           ; pfile_descriptor = &file_descriptor[0]
 A1 7D 7F 00 00        # mov eax, [&next_filenum]
 C1 E0 04              # shl eax, 04
 01 C7                 # add edi, eax                  ; pfile_descriptor += sizeof(file_descriptor) * next_filenum
@@ -848,7 +848,7 @@ EB 18                 # jmp syscall_open_finish
 9A 8F 80 00 00 08 00  # call find_file
 89 C1                 # mov ecx, eax
 # set read offset to start of file
-BE 00 08 01 00        # mov esi, 0x0010800       ; pfile_descriptor = &file_descriptor[0]
+BE 00 00 00 01        # mov esi, 0x01000000      ; pfile_descriptor = &file_descriptor[0]
 C1 E1 04              # shl ecx, 04
 01 CE                 # add esi, ecx             ; pfile_descriptor += sizeof(file_descriptor) * filenum
 31 C9                 # xor ecx, ecx
@@ -1054,7 +1054,7 @@ CB                    # ret
 
 # stdin disk position is stored in fd 0
 # get current position
-BB 00 08 01 00        # mov ebx, 0x10800
+BB 00 00 00 01        # mov ebx, 0x01000000
 66 8B 0B              # mov cx, [ebx]
 8A 73 02              # mov dh, [ebx+2]
 31 C0                 # xor eax, eax
@@ -1084,7 +1084,7 @@ B9 00 02 00 00        # mov ecx, 0x0000200
 F3 A4                 # rep movsb
 
 #:getchar
-66 A3 04 08 01 00     # mov [0x10804], ax
+66 A3 04 00 00 01     # mov [0x01000004], ax
 59                    # pop ecx
 BB 00 00 04 00        # mov ebx, 0x40000    ; device buffer
 89 C6                 # mov esi, eax        ; offset
@@ -1094,9 +1094,8 @@ B8 01 00 00 00        # mov eax, 1
 EB 29                 # jmp syscall_read_finish
 
 #:read_memfile
-
 # get descriptor address
-BE 00 08 01 00        # mov esi, 0x0010800     ; pfile_descriptor = &file_descriptor[0]
+BE 00 00 00 01        # mov esi, 0x01000000    ; pfile_descriptor = &file_descriptor[0]
 89 D9                 # mov ecx, ebx
 C1 E1 04              # shl ecx, 04
 01 CE                 # add esi, ecx           ; pfile_descriptor += sizeof(file_descriptor) * filenum
@@ -1202,7 +1201,7 @@ EB EC                 # jmp std_loop
 
 #:write_memfile
 C1 E3 04              # shl ebx, 04
-81 C3 00 08 01 00     # add ebx, 0x010800       ; pfile_descriptor += sizeof(file_descriptor) * filenum
+81 C3 00 00 00 01     # add ebx, 0x01000000     ; pfile_descriptor += sizeof(file_descriptor) * filenum
 # prepare to write
 89 CE                 # mov esi, ecx
 8B 7B 04              # mov edi, [ebx+4]        ; ebx = pfile_descriptor->file_address
@@ -1415,7 +1414,7 @@ AA                    # stosb
 9A F7 7F 00 00 08 00  # call absolute_path
 9A 8F 80 00 00 08 00  # call find_file           ; eax=find_file(ebx)
 C1 E0 04              # shl eax, 04              ; pfile_descriptor = sizeof(file_descriptor) * filenum
-05 00 08 01 00        # add eax, 0x00010800      ; pfile_descriptor += &file_descriptors[0]
+05 00 00 00 01        # add eax, 0x01000000      ; pfile_descriptor += &file_descriptors[0]
 
 8B 40 04              # mov eax, [eax + 0x4]     ; eax = pfile_descriptor->file_address
 89 C3                 # mov ebx, eax             ; save file address
@@ -1488,7 +1487,7 @@ C3                    # ret
 74 3F                 # je chdir_finish
 
 C1 E0 04              # shl eax, 04
-05 08 08 01 00        # add eax, 0x00010808     ; eax = &file_descriptor[filenum].file_length
+05 08 00 00 01        # add eax, 0x01000008     ; eax = &file_descriptor[filenum].file_length
 83 38 00              # cmp long [eax], 0
 74 07                 # je chdir_ok
 
@@ -1590,7 +1589,7 @@ CB                    # ret                    ; go back to parent
 56                    # push esi
 
 89 D8                 # mov eax, ebx
-BE 00 08 01 00        # mov esi, 0x0010800       ; pfile_descriptor = &file_descriptor[0]
+BE 00 00 00 01        # mov esi, 0x01000000      ; pfile_descriptor = &file_descriptor[0]
 C1 E0 04              # shl eax, 04
 01 C6                 # add esi, eax
 
@@ -2127,9 +2126,9 @@ CB
 #[876C]
 #:internalshell
 # Start reading stdin from sector 8, cyl 0, head 0
-C7 05 00 08 01 00 08 00 00 00  # mov word [0x010800], 0x00000008
+C7 05 00 00 00 01 08 00 00 00  # mov word [0x01000000], 0x00000008
 # start at "end of sector" to trigger an initial sector read
-66 C7 05 04 08 01 00 FF 01  # mov word [0x010804], 0x01FF
+66 C7 05 04 00 00 01 FF 01  # mov word [0x01000004], 0x01FF
 66 C7 05 00 01 02 00 2F 00  # mov [0x00020100], 0x002F     ; proc[0].cwd = "/"
 66 C7 05 00 03 02 00 2F 00  # mov [0x00020300], 0x002F     ; proc[1].cwd = "/"
 
@@ -2183,7 +2182,7 @@ EB 62                 # jmp shell_reboot
 #:ok_exit
 # get file address to read
 C1 E0 04              # shl eax, 04
-05 00 08 01 00        # add eax, 0x0010800
+05 00 00 00 01        # add eax, 0x01000000
 8B 70 04              # mov esi, [eax+4]         ; file_address
 8B 58 08              # mov ebx, [eax+8]         ; bytes_to_write = file_length
 

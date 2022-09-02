@@ -3,7 +3,7 @@ Builder-Hex0 is a builder with a hex0 compiler. It runs in the form of a bootabl
 
 It has these features:
 * Minimal 32-bit mode POSIX kernel
-* The kernel is less than 3K in size
+* The kernel is less than 3.5K in size
 * Built-in Minimal Shell
 * Built-in `src` command to load source files
 * Built-in `hex0` Compiler converts hex source to binary files
@@ -174,7 +174,7 @@ The kernel "simulates" a spawn pattern with this pattern:
 
 ## Limitations
 
-* Only 3967 files can be created.
+* Only 14332 files can be created.
 * The total size of all files cannot exceed 536,870,911 bytes.
 * A file name is limited to 1K bytes.
 * Opening an existing file for write creates a new (empty) file with the same name.
