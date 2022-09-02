@@ -1106,18 +1106,20 @@ BE 00 00 02 00        # mov esi, 0x0020000       ; pproc_descriptor = &proc_desc
 C1 E0 09              # shl eax, 09
 01 C6                 # add esi, eax             ; pproc_descriptor += sizeof(proc_descriptor) * procnum
 
-85 DB                 # test ebx, ebx
-74 13                 # jz get_brk
+85 DB                 # test ebx, ebx            ; if ebx == 0, just return the current brk
+74 15                 # jz get_brk
 
 # set
 # initialize memory to zero
 57                    # push edi
-31 C0                 # xor eax, eax
 8B 7E 04              # mov edi, [esi+4]
+31 C0                 # xor eax, eax
 :init_loop
-AA                    # stosb
 39 DF                 # cmp edi, ebx
-75 FB                 # jne init_loop
+74 03                 # je init_done
+AA                    # stosb
+EB F9                 # jmp init_loop
+:init_done
 5F                    # pop edi
 
 89 5E 04              # mov [esi+4], ebx
@@ -2162,7 +2164,6 @@ B0 20                 # mov al, 20
 EA &reboot 08 00  # jmp reboot
 
 # sector padding
-                                          00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
