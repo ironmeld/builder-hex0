@@ -13,8 +13,9 @@ It has these features:
 ## Status
 
 * Initial development goals have been reached.
-  * It can build x86 [stage0-posix](https://github.com/oriansj/stage0-posix) up to a working M2-Mesoplanet compiler, which supports a subset of C
-  * It can build itself
+  * It can build itself.
+  * It can build x86 [stage0-posix](https://github.com/oriansj/stage0-posix) up to a working M2-Mesoplanet compiler.
+  * It can build [live-bootstrap](https://github.com/fosslinux/live-bootstrap) up to tcc-0.9.26.
 
 * For experienced developers
   * Natively written in hex0
