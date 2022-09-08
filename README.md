@@ -161,8 +161,8 @@ The kernel runs in 32-bit mode but temporarily drops into 16-bit mode to access 
 ### fork/execve/waitpid
 
 The kernel "simulates" a spawn pattern with this pattern:
-* Fork records the top of the stack and returns as child.
-* execve moves the parent process image aside and runs the child in the same address space.
+* Fork snapshots the process image and stack and returns as child.
+* execve overlays the child in the same address space as the parent.
 * When the child calls exit, the parent process and stack is restored and returns from the previous fork again, as parent
 * The parent calls waitpid which returns success because the child is already finished
 
