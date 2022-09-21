@@ -784,7 +784,41 @@ CF                    # iret
 9A &absolute_path 08 00  # call absolute_path
 
 F7 C1 03 00 00 00     # test ecx, 3
-74 42                 # jz open_read
+74 6B                 # jz open_read
+
+
+# Exit with error if directory does not exist
+
+# Go the end of filename
+89 DE                 # mov esi, ebx
+:end_loop
+AC                    # lodsb
+3C 00                 # cmp al, 0
+75 FB                 # jne end_loop
+# Look in reverse for last slash
+4E                    # dec esi
+FD                    # std                     ; go backwards
+:find_slash_loop
+AC                    # lodsb
+3C 2F                 # cmp al, '/'
+75 FB                 # jne find_slash_loop
+# If first slash at start, its root, so it exists
+FC                    # cld
+46                    # inc esi
+39 DE                 # cmp esi, ebx
+74 15                 # je skip_dir_lookup
+# Zero out slash
+31 C0                 # xor eax, eax
+89 F7                 # mov edi, esi
+AA                    # stosb
+# Lookup directory
+9A &find_file 08 00  # call find_file           ; eax=find_file(ebx)
+# Restore first char
+C6 47 FF 2F           # mov byte [edi - 1], 0x2f
+83 F8 FF              # cmp eax, -1
+74 5F                 # je syscall_open_finish
+
+:skip_dir_lookup
 
 # copy filename to new slot
 89 DE                 # mov esi, ebx
@@ -2174,10 +2208,7 @@ B0 20                 # mov al, 20
 EA &reboot 08 00  # jmp reboot
 
 # sector padding
-   00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+                              00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
