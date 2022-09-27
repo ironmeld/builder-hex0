@@ -943,7 +943,7 @@ AA                    # stosb
 ## find_slash
 AC                    # lodsb
 3C 00                 # cmp al, 0
-74 2E                 # je absolute_path_finish
+74 33                 # je absolute_path_finish
 3C 2F                 # cmp al, '/'
 75 F7                 # jne find_slash
 
@@ -951,7 +951,7 @@ AC                    # lodsb
 AC                    # lodsb
 # check for /. or /..
 3C 00                 # cmp al, 0
-74 25                 # je absolute_path_finish
+74 2A                 # je absolute_path_finish
 3C 2E                 # cmp al, '.'
 74 06                 # je dot_or_dotdot
 89 F2                 # mov edx, esi             ; record start of parent
@@ -972,6 +972,10 @@ AA                    # stosb
 EB D7                 # jmp handle_dots_loop
 
 :remove_slashdot
+3C 00                 # cmp al, 0
+75 01                 # jne not_ending_slashdot
+4E                    # dec esi                    ; go back to null
+:not_ending_slashdot
 89 F7                 # mov edi, esi
 4F                    # dec edi
 4F                    # dec edi
@@ -980,7 +984,7 @@ AC                    # lodsb
 AA                    # stosb
 3C 00                 # cmp al, 0
 75 FA                 # jne copy_over_slashdot
-EB CB                 # jmp handle_dots_loop
+EB C6                 # jmp handle_dots_loop
 
 :absolute_path_finish
 5B                    # pop ebx
@@ -2208,7 +2212,7 @@ B0 20                 # mov al, 20
 EA &reboot 08 00  # jmp reboot
 
 # sector padding
-                              00 00 00 00 00 00
+                                             00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
