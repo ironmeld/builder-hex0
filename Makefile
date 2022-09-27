@@ -37,7 +37,9 @@ BUILD/builder-hex0-self-built.bin: BUILD/builder-hex0-mini-built.bin BUILD/build
 	(cd BUILD && diff builder-hex0-self-built.bin builder-hex0-mini-built.bin)
 
 BUILD/builder-hex0.src: builder-hex0.hex0 hex0-to-src.sh | BUILD
-	./hex0-to-src.sh ./builder-hex0.hex0 > $@
+	# create directory so we can write into it
+	echo "src 0 /dev" > $@
+	./hex0-to-src.sh ./builder-hex0.hex0 >> $@
 
 
 # The "full" builder-hex0 built by the self-built mini builder
