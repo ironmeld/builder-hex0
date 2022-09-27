@@ -1414,6 +1414,18 @@ AA                    # stosb
 # get file address and length
 9A &absolute_path 08 00  # call absolute_path
 9A &find_file 08 00  # call find_file           ; eax=find_file(ebx)
+
+# zero process memory.
+# Do this after looking up file name because that may come from process memory.
+50                    # push eax
+57                    # push edi
+31 C0                 # xor eax, eax
+BF 00 80 04 08        # mov edi, 0x08048000
+B9 00 80 FB 26        # mov ecx, 0x26FB8000
+F3 AA                 # rep stosb
+5F                    # pop edi
+58                    # pop eax
+
 C1 E0 04              # shl eax, 04              ; pfile_descriptor = sizeof(file_descriptor) * filenum
 05 00 00 00 01        # add eax, 0x01000000      ; pfile_descriptor += &file_descriptors[0]
 
@@ -2212,9 +2224,7 @@ B0 20                 # mov al, 20
 EA &reboot 08 00  # jmp reboot
 
 # sector padding
-                                             00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+   00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
