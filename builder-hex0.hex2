@@ -1651,7 +1651,10 @@ CB                    # ret
 51                    # push ecx
 B9 41 00 00 00        # mov ecx, 0x41  (O_CREAT | O_WRONLY)
 9A &handle_syscall_open 08 00  # call handle_syscall_open
+83 F8 FF              # cmp eax, -1
+74 02                 # je open_error_exit
 31 C0                 # xor eax, eax
+:open_error_exit
 59                    # pop ecx
 CB                    # ret
 
@@ -2133,7 +2136,7 @@ C7 05 00 00 00 01 08 00 00 00  # mov word [0x01000000], 0x00000008
 # read from stdin
 31 DB                 # xor ebx, ebx
 
-:process_command:
+:process_command
 9A &read 08 00  # call read
 3C 00                 # cmp al, 0
 74 23                 # je build_finished
@@ -2224,8 +2227,7 @@ B0 20                 # mov al, 20
 EA &reboot 08 00  # jmp reboot
 
 # sector padding
-   00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
+00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
