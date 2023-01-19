@@ -139,6 +139,7 @@ The following system calls are implemented to some extent:
 * read
 * write
 * open
+* close
 * waitpid
 * execve
 * chmod
@@ -180,7 +181,6 @@ The kernel "simulates" a spawn pattern with this pattern:
 * A file name is limited to 1K bytes.
 * Opening an existing file for write creates a new (empty) file with the same name.
     * Only the most recent file with the same name can be opened for read.
-* All processes share the same file descriptors (i.e. current read and write locations)
 
 * Only one argument is parsed for processes launched by the internal shell
 * A process launched by the internalshell cannot start with 's' or 'h'
