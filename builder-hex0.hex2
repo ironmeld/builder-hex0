@@ -1265,7 +1265,7 @@ CB                    # ret
 # stdout,stderr -> console_out
 :std_loop
 85 D2                 # test edx, edx
-74 52                 # jz syscall_write_finish
+74 5B                 # jz syscall_write_finish
 50                    # push eax                ; save num_written
 8A 01                 # mov al, [ecx]
 9A &console_putc 08 00  # call console_putc
@@ -1298,14 +1298,21 @@ C1 E3 04              # shl ebx, 04
 03 39                 # add edi, [ecx]          ; edi = file_addr + current_offset
 :write_loop
 85 D2                 # test edx, edx
-74 10                 # jz syscall_write_finish
+74 19                 # jz syscall_write_finish
 A4                    # movsb
 FF 01                 # inc long [ecx]       ; current_offset++
+# If current offset is past previous file length, then increase length
+50                    # push eax
+8B 01                 # mov eax, [ecx]
+3B 43 08              # cmp eax, [ebx+0x8]
+7E 09                 # jle skip_lengthen
 FF 43 08              # inc long [ebx+0x8]   ; file_length++
 FF 05 &next_file_address     # inc long [next_file_address]
+:skip_lengthen
+58                    # pop eax
 40                    # inc eax              ; num_written++
 4A                    # dec edx
-EB EC                 # jmp write_loop
+EB E3                 # jmp write_loop
 
 :syscall_write_finish
 5F                    # pop edi
@@ -2338,7 +2345,7 @@ B0 20                 # mov al, 20
 EA &reboot 08 00  # jmp reboot
 
 # sector padding
-00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
