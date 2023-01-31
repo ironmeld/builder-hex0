@@ -244,13 +244,13 @@ CB              # retf
 88 C8           # mov al, cl          ; get sector number
 24 3F           # and al, 0x3f
 3A 06 53 7C     # cmp al, [max_sector]; if sector_num == max_sector
-74 04           # jz next_head        ;      goto next_head
+74 04           # je next_head        ;      goto next_head
 FE C1           # inc cl              ; else sector_num++;
 EB 28           # jmp next_sector_finish
 
 :next_head
 3A 36 52 7C     # cmp dh, [max_head]  ; if head_num == max_head
-74 09           # jz next_cylinder    ;      goto next_cyclinder
+74 09           # je next_cylinder    ;      goto next_cyclinder
 FE C6           # inc dh              ; else head_num++
 80 E1 C0        # and cl, 0xc0        ;      sector_num = 1
 FE C1           # inc cl              ;
@@ -268,7 +268,7 @@ EB 09           # jmp next_sector_finish
 
 :next_cyl_high
 30 F6           # xor dh, dh          ; head_num = 0
-81 C1 C0 00     # and cx, 0x00C0      ; cylinder_low = 0, sector_num = 0
+81 E1 C0 00     # and cx, 0x00C0      ; cylinder_low = 0, sector_num = 0
 80 C1 41        # add cl, 0x41        ; cylinder_high++, sector_num++
 
 :next_sector_finish
