@@ -1190,7 +1190,7 @@ C1 E0 03              # shl eax, 3
 
 :syscall_read_loop
 39 CE                 # cmp esi, ecx            ; past the end?
-7F 07                 # jg syscall_read_finish
+77 07                 # ja syscall_read_finish
 
 A4                    # movsb
 40                    # inc eax                 ; bytes_read++
