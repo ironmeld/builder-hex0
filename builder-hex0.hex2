@@ -61,8 +61,8 @@
 
 #------------------------------------------------------------
 # Memory:
-# 60000000 - 7FFFFFFF files (~536MB)
-# 30000000 - 5FFFFFFF saved processes (805MB)
+# 58000000 - BFFFFFFF files (~1745MB)
+# 30000000 - 57FFFFFF saved processes (~670MB)
 # 08048000 - 2FFFFFFF current running process (~670MB)
 # 01080000 - 08000000 32 bit stack (117MB)
 # 01000010 - 0107FFFF file descriptors (16 bytes each * 32K)
@@ -777,7 +777,7 @@ CF                    # iret
 
 #------
 :next_file_address
-00 00 00 60
+00 00 00 58
 
 #----------------------------------------
 :handle_syscall_open
