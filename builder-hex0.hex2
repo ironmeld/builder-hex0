@@ -66,7 +66,7 @@
 # 08048000 - 2FFFFFFF current running process (~670MB)
 # 01080000 - 08000000 32 bit stack (117MB)
 # 01000010 - 0107FFFF file descriptors (16 bytes each * 32K)
-#                      { unused, address, length, current_offset }
+#                      { unused, address, length, unused }
 # 01000000 - 0100000F stdin disk locator
 #                      { cylinder/sector (2 bytes), head (1 byte), unused byte,
 #                        offset (2 bytes), unused }
@@ -85,7 +85,7 @@
 #                      0x00C  0x004  saved stack pointer
 #                      0x010  0x004  forked?
 #                      0x014  0x004  saved brk pointer
-#                      0x018  0x004  address of process env/args
+#                      0x018  0x004  unused
 #                      0x01C  0x004  address of saved process memory
 #                      0x020  0x004  length of process memory
 #                      0x024  0x004  address of saved process stack
@@ -854,20 +854,18 @@ C1 E0 04              # shl eax, 04
 
 A1 &next_filenum        # mov eax, [next_filenum]       ; return next_filenum
 FF 05 &next_filenum     # inc [next_filenum]
-EB 1D                 # jmp syscall_open_finish
+EB 18                 # jmp syscall_open_finish
 
 #open_read
 9A &find_file 08 00  # call find_file
 83 F8 FF              # cmp eax, -1
-74 39                 # je syscall_open_finish_fail
+74 34                 # je syscall_open_finish_fail
 
 89 C1                 # mov ecx, eax
 # set read offset to start of file
 BE 00 00 00 01        # mov esi, 0x01000000      ; pfile_descriptor = &file_descriptor[0]
 C1 E1 04              # shl ecx, 04
 01 CE                 # add esi, ecx             ; pfile_descriptor += sizeof(file_descriptor) * filenum
-31 C9                 # xor ecx, ecx
-89 4E 0C              # mov [esi+0xC], ecx       ; current offset = 0
 
 :syscall_open_finish
 8B 35 &next_process_num     # mov esi, [&next_process_num]
@@ -1390,12 +1388,11 @@ CB                    # ret
 
 A1 &next_process_num        # mov eax, [next_process_num]
 3C 01                 # cmp al, 1
-75 11                 # jne not_first_process
+75 0A                 # jne not_first_process
 
 # first process
 BD 00 10 02 00        # mov ebp, 0x00021000      ; ebp = &proc_descriptor[1]
 89 65 08              # mov [ebp+0x8], esp       ; save original stack pointer before pushing args
-C7 45 18 00 00 00 30  # mov dword [ebp+0x18], 0x30000000   ; save start of env+args
 EB 23                 # jmp prepare_stack
 
 # not_first_process
@@ -1478,8 +1475,6 @@ A1 &next_process_num        # mov eax, [next_process_num]
 C1 E0 0C              # shl eax, 0x0C
 05 00 00 02 00        # add eax, 0x0020000       ; pproc_descriptor = &proc_descriptor[current_process_num]
 
-8B 35 &next_save_process_address  # mov esi, [next_save_process_address]   ; record start of env+args
-89 B0 18 02 00 00     # mov [eax+0x218], esi
 89 3D &next_save_process_address  # mov [next_save_process_address], edi
 
 # copy cwd from current process
@@ -2343,7 +2338,8 @@ B0 20                 # mov al, 20
 EA &reboot 08 00  # jmp reboot
 
 # sector padding
-00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
