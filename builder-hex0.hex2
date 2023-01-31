@@ -792,7 +792,7 @@ CF                    # iret
 
 9A &absolute_path 08 00  # call absolute_path
 
-F7 C1 03 00 00 00     # test ecx, 3
+F7 C1 40 00 00 00     # test ecx, 0x40         ; 0x40 is O_CREAT
 74 72                 # jz open_read
 
 # Create new file
