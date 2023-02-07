@@ -11,8 +11,9 @@ INPUT="input.bin"
 LOG="build.log"
 ENABLE_KVM="${ENABLE_KVM--enable-kvm}"
 
-# Create empty 504MB disk image
-dd if=/dev/zero of="$IMG" bs=512 count=2048006
+# Create empty 1056MB disk image.
+# (1024 cylinders * 32 heads * 63 sectors * 512 bytes/sector)
+dd if=/dev/zero of="$IMG" bs=512 count=2064384
 
 # Append builder binary with source to create input
 cat "$BIN" "$SRC" > "$INPUT"
@@ -21,7 +22,7 @@ cat "$BIN" "$SRC" > "$INPUT"
 dd if="$INPUT" of="$IMG" conv=notrunc
 
 # Launch build
-qemu-system-x86_64 $ENABLE_KVM -m 2G -nographic -drive file="$IMG",format=raw --no-reboot | tee "$LOG"
+qemu-system-x86_64 $ENABLE_KVM -m 4G -nographic -drive file="$IMG",format=raw --no-reboot | tee "$LOG"
 
 # Extract the result
 HEXLEN=$(tail -1 "$LOG" | tr -d '\r')
