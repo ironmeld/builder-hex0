@@ -22,7 +22,7 @@ cat "$BIN" "$SRC" > "$INPUT"
 dd if="$INPUT" of="$IMG" conv=notrunc
 
 # Launch build
-qemu-system-x86_64 $ENABLE_KVM -m 4G -nographic -drive file="$IMG",format=raw --no-reboot | tee "$LOG"
+qemu-system-x86_64 $ENABLE_KVM -m 4G -nographic -machine kernel-irqchip=split -drive file="$IMG",format=raw --no-reboot | tee "$LOG"
 
 # Extract the result
 HEXLEN=$(tail -1 "$LOG" | tr -d '\r')
