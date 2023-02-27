@@ -85,7 +85,7 @@
 #                      0x00C  0x004  saved stack pointer
 #                      0x010  0x004  forked?
 #                      0x014  0x004  saved brk pointer
-#                      0x018  0x004  unused
+#                      0x018  0x004  child exit code
 #                      0x01C  0x004  address of saved process memory
 #                      0x020  0x004  length of process memory
 #                      0x024  0x004  address of saved process stack
@@ -716,11 +716,9 @@ CF                    # iret
 9A &handle_syscall_close 08 00  # call handle_syscall_close
 CF                    # iret
 
-# waitpid
 3C 07                 # cmp eax, 7
-75 05                 # jne try next
-31 C0                 # xor eax, eax
-89 01                 # mov [ecx], eax
+75 08                 # jne try next
+9A &handle_syscall_waitpid 08 00  # call handle_syscall_waitpid
 CF                    # iret
 
 3C 0B                 # cmp eax, B
@@ -1640,13 +1638,6 @@ CB                    # retf
 
 #----------------------------------------
 :handle_syscall_exit
-89 D8                 # mov eax, ebx
-85 C0                 # test eax, eax
-74 02                 # jz okexit
-
-EB FE  # loop forever
-
-:okexit
 A1 &next_process_num        # mov eax, [&next_process_num]
 48                    # dec eax = current process
 A3 &next_process_num        # mov [&next_process_num], eax
@@ -1661,6 +1652,7 @@ CB                    # ret
 #not_first
 C1 E0 0C              # shl eax, 0x0C
 05 00 00 02 00        # add eax, 0x0020000       ; pproc_descriptor = &proc_descriptor[0]
+89 58 18              # mov [eax+0x18], ebx      ; save child exit code
 
 8B 38                 # mov edi, [eax]           ; edi = pproc_descriptor->process_address
 8B 70 1C              # mov esi, [eax+0x1C]      ; esi = pproc_descriptor->address_of_saved_process_memory
@@ -1688,6 +1680,19 @@ B8 01 00 00 00        # mov eax, 0x1           ; process number for fork
 59                    # pop ecx
 5B                    # pop ebx
 CB                    # ret                    ; go back to parent
+
+
+#----------------------------------------
+:handle_syscall_waitpid
+8B 35 &next_process_num     # mov esi, [&next_process_num]
+4E                    # dec esi = current process
+C1 E6 0C              # shl esi, 0x0C
+81 C6 04 02 02 00     # add esi, 0x0020018       ; pchild_code = &pproc_descriptor[current_process_num].child_exit_code
+8B 06                 # mov eax, [esi]           ; get exit code
+C1 E0 08              # shl eax, 0x08            ;
+89 01                 # mov [ecx], eax           ; waitval = ret << 8
+31 C0                 # xor eax, eax
+CB                    # ret
 
 
 #----------------------------------------
@@ -2345,9 +2350,7 @@ B0 20                 # mov al, 20
 EA &reboot 08 00  # jmp reboot
 
 # sector padding
-00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
