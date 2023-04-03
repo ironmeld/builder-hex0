@@ -1796,12 +1796,21 @@ CB                    # ret
 C1 E6 0C              # shl esi, 0x0C
 81 C6 00 01 02 00     # add esi, 0x0020100       ; pproc_descriptor = &pproc_descriptor[current_process_num].current_dir
 
+# Handle root differently because we don't strip trailing slash
+66 83 3E 2F           # cmp word [esi], $002f   ; is cwd == "/" ?
+75 04                 # jne copy_cwd
+66 A5                 # movsw                   ; copy "/" to buffer
+EB 0A                 # jmp cleanup
+
 # copy_cwd
 AC                    # lodsb
 AA                    # stosb
 3C 00                 # cmp al, 0
 75 FA                 # jne copy_cwd
+83 EF 02              # sub edi, 2              ; strip trailing slash
+AA                    # stosb
 
+# cleanup
 89 D8                 # mov eax, ebx
 5F                    # pop edi
 5E                    # pop esi
@@ -2354,8 +2363,7 @@ B0 20                 # mov al, 20
 EA &reboot 08 00  # jmp reboot
 
 # sector padding
-00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
