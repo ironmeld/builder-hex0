@@ -48,6 +48,7 @@
 # handle_syscall_execve
 # handle_syscall_chdir
 # handle_syscall_exit
+# handle_syscall_waitpid
 # handle_syscall_lseek
 # handle_syscall_access
 # handle_syscall_mkdir
@@ -1690,7 +1691,7 @@ CB                    # ret                    ; go back to parent
 8B 35 &next_process_num     # mov esi, [&next_process_num]
 4E                    # dec esi = current process
 C1 E6 0C              # shl esi, 0x0C
-81 C6 04 02 02 00     # add esi, 0x0020018       ; pchild_code = &pproc_descriptor[current_process_num].child_exit_code
+81 C6 18 00 02 00     # add esi, 0x00020018      ; pchild_code = &pproc_descriptor[current_process_num].child_exit_code
 8B 06                 # mov eax, [esi]           ; get exit code
 C1 E0 08              # shl eax, 0x08            ;
 89 01                 # mov [ecx], eax           ; waitval = ret << 8
