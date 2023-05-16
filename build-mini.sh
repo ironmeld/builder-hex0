@@ -9,8 +9,8 @@ ARTIFACT="$4"
 
 IMG=builder-hex0-mini.img
 
-# Create empty disk image for up to 64K of source
-dd if=/dev/zero of="$IMG" bs=512 count=129
+# Create empty disk image for up to 128K of source
+dd if=/dev/zero of="$IMG" bs=512 count=257
 
 # Add binary boot sectors
 dd if="$BIN" of="$IMG" bs=512 conv=notrunc
