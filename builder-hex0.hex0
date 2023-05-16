@@ -600,7 +600,7 @@ CB                    # retf
 #------
 #[7E22]
 #:IDT_locator_16
-FF FF
+FF 03
 00 00 00 00
 
 

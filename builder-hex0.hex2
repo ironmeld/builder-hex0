@@ -579,7 +579,7 @@ CB                    # retf
 
 #------
 :IDT_locator_16
-FF FF
+FF 03
 00 00 00 00
 
 
