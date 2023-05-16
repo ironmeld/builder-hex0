@@ -7,19 +7,19 @@ It has these features:
 * Built-in Minimal Shell
 * Built-in `src` command to load source files
 * Built-in `hex0` Compiler converts hex source to binary files
-* Written in 2K lines of commented hex
-* Bootstraps using a 16-bit "mini" boot kernel that is only 384 bytes
+* Written in about 2400 lines of commented hex
+* Can be built using a 16-bit "mini" builder that is only 384 bytes
+* Can be built and launched using a 16-bit stage1 boot loader that is only 200 bytes
 
 ## Status
 
 * Initial development goals have been reached.
   * It can build itself.
   * It can build x86 [stage0-posix](https://github.com/oriansj/stage0-posix) up to a working M2-Mesoplanet compiler.
-  * It can build [live-bootstrap](https://github.com/fosslinux/live-bootstrap) up to tcc-0.9.26.
+  * It can build [live-bootstrap](https://github.com/fosslinux/live-bootstrap) up to tcc-0.9.27.
 
 * For experienced developers
-  * Natively written in hex0
-  * All relative jumps were hand calculated
+  * Natively written in hex0 and hex2
   * Includes nasm-like assembly comments for reference only
   * Minimal to no error checking
 
@@ -33,7 +33,7 @@ This kernel is for bootstrapping compilers without having to trust a prebuilt bi
 
 ## Building with make
 
-The build requires qemu-system-x86_64 with kvm enabled.
+The build requires qemu-system-x86\_64 with kvm enabled.
 
 Run:
 
@@ -69,9 +69,19 @@ The Makefile does this:
 See build.sh for further guidance on the above instructions.
 
 
+## Build Instructions for Stage1/Stage2
+
+1. Create a disk image filled with zeros in multiples of 512 bytes.
+2. Convert builder-hex0-x86-stage1.hex0 to binary using a method you trust.
+3. Pad the binary to 512 bytes. Set byte 511 to 0x55 and byte 512 to 0xAA which is the MBR identifier
+4. Append the stage2 hex0 source code
+5. Pad the binary with zeros to the next sector
+6. Follow the Manual Build Instructions starting with step #3.
+
+
 ## Machine Requirements
 * x86 32-bit Processor
-* 2GB of memory
+* 4GB of memory
 * PC compatible-BIOS
    * Must support int 10h,AH=0Eh (Write character to console)
    * Must support int 13h,AH=02h (Read Sectors)
@@ -86,7 +96,7 @@ The builder shell is the first "process" to start although it is really just a f
 
 This internal shell reads commands from standard input.
 The kernel provides this input by reading the contents of the disk starting right after the kernel, starting with sector 8,
-which can be thought of as the first partition (/dev/hda1).
+which can be thought of as the first partition (/dev/hda1). Reading starts at sector 22 if stage1+stage2 is used.
 
 Essentially, the kernel starts by executing the equivalent of this command:
 ```
@@ -269,7 +279,7 @@ character
 * https://stackoverflow.com/questions/9057670/how-to-write-on-hard-disk-with-bios-interrupt-13h (CHS calculations for int 13)
 
 ## OS Development
-* https://wiki.osdev.org/Main_Page
+* https://wiki.osdev.org/Main\_Page
 * http://asm.sourceforge.net/articles/startup.html (initial stack structure for executables)
 
 ### Tools

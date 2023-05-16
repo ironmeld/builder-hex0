@@ -28,6 +28,7 @@
 # The "full" builder takes .src files which are primitive shell scripts and
 # can build itself and other compilers.
 
+all: BUILD/builder-hex0-self-built.bin BUILD/builder-hex0-x86-stage1.bin
 
 # The (full) builder-hex0 built by a (full) builder-hex0 (built by the mini builder)
 BUILD/builder-hex0-self-built.bin: BUILD/builder-hex0-mini-built.bin BUILD/builder-hex0.src build.sh | BUILD
@@ -77,6 +78,9 @@ BUILD/builder-hex0-seed.bin: builder-hex0.hex0 | BUILD
 	# uses cut to strip comments starting with pound or semicolon.
 	# uses xxd to convert hex to binary
 	cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > BUILD/builder-hex0-seed.bin
+
+BUILD/builder-hex0-x86-stage1.bin: builder-hex0-x86-stage1.hex0 | BUILD
+	cut builder-hex0-x86-stage1.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > BUILD/builder-hex0-x86-stage1.bin
 
 BUILD:
 	mkdir BUILD
