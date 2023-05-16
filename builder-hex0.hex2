@@ -933,7 +933,7 @@ BF 00 02 04 00        # mov edi, 0x00040200      ; scratch buffer
 57                    # push edi
 
 # if absolute path, skip prefixing current directory
-80 3b 2f              # cmp [ebx], '/'
+80 3B 2F              # cmp [ebx], '/'
 74 18                 # je strcpy_path_arg
 
 # get cwd
@@ -1132,7 +1132,7 @@ BB 00 00 00 01        # mov ebx, 0x01000000
 66 8B 43 04           # mov ax, [ebx+4]
 
 #end of sector?
-66 3D ff 01           # cmp ax, 0x01ff
+66 3D FF 01           # cmp ax, 0x01ff
 74 04                 # je read_next_sector
 
 :nextchar
@@ -1347,7 +1347,7 @@ C1 E0 0C              # shl eax, 0x0C
 8b 77 04              # mov esi, [edi+0x4]       ; save brk pointer
 89 77 14              # mov [edi+0x14], esi
 89 E6                 # mov esi, esp
-89 77 0c              # mov [edi+0xC], esi       ; save stack pointer so we can return again later
+89 77 0C              # mov [edi+0xC], esi       ; save stack pointer so we can return again later
 FF 47 10              # inc [edi+0x10]           ; fork = true
 
 A1 &next_save_process_address  # mov eax, [next_save_process_address]    ; set save stack location
@@ -2088,7 +2088,7 @@ CD 80                 # int 80
 9A &read 08 00  # call read
 5B                    # pop ebx
 
-84 e4                 # test ah, ah
+84 E4                 # test ah, ah
 75 04                 # jnz check_command
 5F                    # POP_DI
 5E                    # POP_SI
@@ -2304,7 +2304,7 @@ BE &str_build_finished        # mov esi, str_build_finished
 # copy memory file /dev/hda to the boot disk
 BB &str_dev_hda        # mov ebx, str_dev_hda
 9A &find_file 08 00  # call find_file
-83 f8 ff              # cmp eax, -1
+83 F8 FF              # cmp eax, -1
 75 17                 # jne ok_exit
 
 :error_exit
