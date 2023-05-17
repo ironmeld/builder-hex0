@@ -28,7 +28,7 @@
 # The "full" builder takes .src files which are primitive shell scripts and
 # can build itself and other compilers.
 
-all: BUILD/builder-hex0-self-built.bin BUILD/builder-hex0-x86-stage1.bin
+all: BUILD/builder-hex0-self-built.bin BUILD/builder-hex0-x86-stage1.img
 
 # The (full) builder-hex0 built by a (full) builder-hex0 (built by the mini builder)
 BUILD/builder-hex0-self-built.bin: BUILD/builder-hex0-mini-built.bin BUILD/builder-hex0.src build.sh | BUILD
@@ -79,8 +79,9 @@ BUILD/builder-hex0-seed.bin: builder-hex0.hex0 | BUILD
 	# uses xxd to convert hex to binary
 	cut builder-hex0.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > BUILD/builder-hex0-seed.bin
 
-BUILD/builder-hex0-x86-stage1.bin: builder-hex0-x86-stage1.hex0 | BUILD
-	cut builder-hex0-x86-stage1.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > BUILD/builder-hex0-x86-stage1.bin
+# stage1 has an img extension to match other files in https://github.com/oriansj/bootstrap-seeds/tree/master/NATIVE/x86
+BUILD/builder-hex0-x86-stage1.img: builder-hex0-x86-stage1.hex0 | BUILD
+	cut builder-hex0-x86-stage1.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > BUILD/builder-hex0-x86-stage1.img
 
 BUILD:
 	mkdir BUILD

@@ -18,9 +18,6 @@ dd if=/dev/zero of="$IMG" bs=512 count=2064384
 # Write the stage1 boot seed
 dd if=$STAGE1 of="$IMG" conv=notrunc
 
-# Write the MBR identifier
-dd if=<(printf \\x55\\xAA) of="$IMG" seek=510 bs=1 count=2 conv=notrunc
-
 # Place stage2 starting at sector 2
 dd if="$STAGE2" of="$IMG" seek=1 bs=512 conv=notrunc
 
