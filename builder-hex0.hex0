@@ -662,9 +662,9 @@ CB              # RETF
 #:console_puts
 # inputs
 #   ds:si: string to print
-#:puts_loop
 50                    # push eax
 56                    # push esi
+#:puts_loop
 8A 06                 # mov al, [esi]
 3C 00                 # cmp al, 0
 74 0A                 # jz end_puts_loop
@@ -2023,9 +2023,9 @@ B9 00 00 D0 04        # mov ecx, 0x04D00000
 88 01                 # mov [ecx], al
 41                    # inc ecx
 EB F0                 # jmp get_file_name_loop
+#:got_filename
 59                    # pop ecx
 
-#:got_filename
 BE 00 00 D0 04        # mov esi, 0x04D00000
 9A 8F 7E 00 00 08 00  # call console_puts
 
@@ -2165,7 +2165,7 @@ CB                    # RETF
 74 24                 # jz skip_comment
 
 3C 66                 # cmp al, 'f'
-7F D1                 # jg hex0_read_loop
+7F E1                 # jg hex0_read_loop
 
 3C 61                 # cmp al, 'a'
 7C 04                 # jl maybe_upper
