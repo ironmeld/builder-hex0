@@ -88,6 +88,7 @@ BUILD:
 
 clean:
 	rm -rf BUILD
+	make -C hex2 clean
 
 # Make does not check whether PHONY targets already exist as files or dirs.
 # It just invokes their recipes when they are targeted, no questions asked.

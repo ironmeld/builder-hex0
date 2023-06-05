@@ -21,8 +21,8 @@ dd if=$STAGE1 of="$IMG" conv=notrunc
 # Place stage2 starting at sector 2
 dd if="$STAGE2" of="$IMG" seek=1 bs=512 conv=notrunc
 
-# Place source starting at sector 148
-dd if="$SRC" of="$IMG" seek=147 bs=512 conv=notrunc
+# Place source starting at sector 160
+dd if="$SRC" of="$IMG" seek=159 bs=512 conv=notrunc
 
 # Launch build
 qemu-system-x86_64 $ENABLE_KVM -m 4G -nographic -machine kernel-irqchip=split -drive file="$IMG",format=raw --no-reboot | tee "$LOG"

@@ -29,7 +29,7 @@
 #
 # boot drive is in dl
 #
-#:_start
+:_start
 
 # We cannot be sure the registers are initialized to zero so we
 # do that first. We far jump to mbr_main in order to set CS.
@@ -43,88 +43,87 @@ FC                # cld ; clear direction flag
 #----------------------------------------
 # Compile hex0 to binary
 # compile(dl=boot_drive):
-BF 00 7E          # mov di, $stage2_entry
+BF $stage2_entry  # mov di, $stage2_entry
 
 # this flag is set after the first digit is seen
 31 DB             # xor bx,bx
 
-#:read_loop
-E8 77 00          # call read
+:read_loop
+E8 @read          # call read
 84 C0             # test al, al
-74 4B             # jz finish
+74 !finish        # jz finish
 
 3C 23             # cmp al, '#'
-74 28             # jz skip_comment
+74 !skip_comment  # jz skip_comment
 
 3C 3B             # cmp ';'
-74 24             # jz skip_comment
+74 !skip_comment  # jz skip_comment
 
 3C 66             # cmp al, 'f'
-7F ED             # jg read_loop
+7F !read_loop     # jg read_loop
 
 3C 61             # cmp al, 'a'
-7C 04             # jl maybe_upper
+7C !maybe_upper   # jl maybe_upper
 
 # Handle a to f
 2C 57             # sub al, 'a'-10 == 87 = 0x57
-EB 21             # jmp maybe_store
+EB !maybe_store   # jmp maybe_store
 
-#:maybe_upper
+:maybe_upper
 3C 46             # cmp al, 'F'
-7F E1             # jg read_loop
+7F !read_loop     # jg read_loop
 
 3C 41             # cmp al, 'A'
-7C 04             # jl maybe_digit
+7C !maybe_digit   # jl maybe_digit
 
 # Handle A to F
 2C 37             # sub al, 'A'-10 == 55 = x37
-EB 15             # jmp maybe_store
+EB !maybe_store   # jmp maybe_store
 
-#:maybe_digit
+:maybe_digit
 3C 39             # cmp al, '9'
-7F D5             # jg read_loop
+7F !read_loop     # jg read_loop
 
 3C 30             # cmp al, '0'
-7C D1             # jl read_loop
+7C !read_loop     # jl read_loop
 
 # Handle 0 to 9
 2C 30             # sub al, '0' == x30
-EB 09             # jmp maybe_store
+EB !maybe_store   # jmp maybe_store
 
-#:skip_comment
-E8 44 00          # call read
+:skip_comment
+E8 @read          # call read
 3C 0A             # cmp al, '\n'
-75 F9             # jnz skip_comment
-EB C4             # jmp read_loop
+75 !skip_comment  # jnz skip_comment
+EB !read_loop     # jmp read_loop
 
 # only store on second digit
-#:maybe_store
+:maybe_store
 84 DB             # test bl, bl
-75 09             # jnz second_digit
+75 !second_digit  # jnz second_digit
 
 # If on first digit, record and keep going
 #:first_digit
 C0 E0 04          # shl al, 4
 88 C7             # mov bh, al
 FE C3             # inc bl
-EB B7             # jmp read_loop
+EB !read_loop     # jmp read_loop
 
 # If on second digit, store and clear state
-#:second_digit
+:second_digit
 08 C7             # or bh, al
 88 F8             # mov al, bh
 AA                # stosb
 31 DB             # xor bx, bx
 
-EB AE             # jmp read_loop
+EB !read_loop     # jmp read_loop
 
-#:finish
-E9 9A 01          # jmp stage2_entry
+:finish
+E9 @stage2_entry  # jmp stage2_entry
 
 
 #------------------------------------------------------------
-#[7C66]
-#:read_sector
+:read_sector
 # input:
 # di = *dest_addr
 # cx=cylinder/sector
@@ -138,39 +137,37 @@ E9 9A 01          # jmp stage2_entry
 
 89 FB                   # mov bx, di      ; int 13 writes to bx
 
-#:read_one_loop
+:read_one_loop
 B4 02                   # mov ah, 2        ; rw mode = 02 (read)
 B0 01                   # mov al, 1        ; num_sectors
 CD 13                   # int 0x13
-72 F8                   # jnc read_one_loop
+72 !read_one_loop       # jnc read_one_loop
 3C 01                   # cmp al, 1
-75 F4                   # jnz read_one_loop
+75 !read_one_loop       # jnz read_one_loop
 
 80 F9 3F                # cmp cl, 0x3f        ; if sector_num == max_sector
-74 04                   # jz next_head        ;      goto next_head
+74 !next_head           # jz next_head        ;      goto next_head
 FE C1                   # inc cl              ; else sector_num++;
-EB 04                   # jmp read_sector_finish
+EB !read_sector_finish  # jmp read_sector_finish
 
-#:next_head
+:next_head
 FE C6                   # inc dh              ; else head_num++
 B1 01                   # mov cl, 1           ; sector = 1
 
-#:read_sector_finish
+:read_sector_finish
 5B                      # pop bx
 58                      # pop ax
 C3                      # ret
 
 
 #----------------------------------------
-#[7C86]
-#:last_read_location
+:last_read_location
 02 00                   ; last_cylinder/sector
 00                      ; last_head
 FF 01                   ; last_byte
 
 #----------------------------------------
-#[7C8B]
-#:read
+:read
 53                      # push bx
 51                      # push cx
 52                      # push dx
@@ -178,28 +175,28 @@ FF 01                   ; last_byte
 57                      # push di
 
 # get current position
-BB 86 7C                # mov bx, last_read_location
+BB $last_read_location  # mov bx, last_read_location
 8B 0F                   # mov cx, [bx]
 8A 77 02                # mov dh, [bx+2]
 8B 47 03                # mov ax, [bx+3]
 
 #end of sector?
 3D FF 01                # cmp ax, 0x01ff
-74 03                   # je read_next_sector
+74 !read_next_sector    # je read_next_sector
 
 #nextchar:
 40                      # inc ax
-EB 0D                   # jmp getchar
+EB !getchar             # jmp getchar
 
-#:read_next_sector
+:read_next_sector
 BF 00 78                # mov di, 0x7800
-E8 BD FF                # call read_sector
+E8 @read_sector         # call read_sector
 # save new location and offset
 89 0F                   # mov [bx], cx
 88 77 02                # mov [bx+2], dh
 31 C0                   # xor ax, ax
 
-#:getchar
+:getchar
 89 47 03                # mov [bx+3], ax
 BE 00 78                # mov si, 0x7800
 89 C3                   # mov bx, ax
@@ -237,4 +234,4 @@ C3                      # ret
 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 # This is the DOS/MBR identifier at offset 510:
 55 AA
-#:stage2_entry
+:stage2_entry

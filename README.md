@@ -9,7 +9,7 @@ It has these features:
 * Built-in `hex0` Compiler converts hex source to binary files
 * Written in about 2400 lines of commented hex
 * Can be built using a 16-bit "mini" builder that is only 384 bytes
-* Can be built and launched using a 16-bit stage1 boot loader that is only 200 bytes
+* Can be built and launched using a 16-bit stage1 boot loader that is only 192 bytes of code
 
 ## Status
 
@@ -23,12 +23,10 @@ It has these features:
   * Includes nasm-like assembly comments for reference only
   * Minimal to no error checking
 
-* Could be somewhat smaller (e.g. with relative calls and inlining)
-
 
 ## Why?
 
-This kernel is for bootstrapping compilers without having to trust a prebuilt binary. You still have to trust that the hex codes provided represent the x86 opcodes in the comments. But verifying the opcodes have been encoded properly is a straightforward process that you are encouraged to do using your own methods. You can also convert the hex to binary by any method you prefer. A Makefile is provided to do all this for you, for convenience, but you are free to distrust that in favor of your own methods.
+This kernel is for bootstrapping compilers without having to aquire and trust a prebuilt binary. You still have to trust that the hex codes provided represent the x86 opcodes in the comments. But verifying the opcodes have been encoded properly is a straightforward process that you are encouraged to do using your own methods. You can also convert the hex to binary by any method you prefer. A Makefile is provided to do all this for you, for convenience, but you are free to distrust that in favor of your own methods.
 
 
 ## Building with make
@@ -73,10 +71,9 @@ See build.sh for further guidance on the above instructions.
 
 1. Create a disk image filled with zeros in multiples of 512 bytes.
 2. Convert builder-hex0-x86-stage1.hex0 to binary using a method you trust.
-3. Pad the binary to 512 bytes. Set byte 511 to 0x55 and byte 512 to 0xAA which is the MBR identifier
-4. Append the stage2 hex0 source code
-5. Pad the binary with zeros to the next sector
-6. Follow the Manual Build Instructions starting with step #3.
+3. Append the stage2 hex0 source code
+4. Pad the binary with zeros to the next sector
+5. Follow the Manual Build Instructions starting with step #3.
 
 
 ## Machine Requirements
@@ -96,7 +93,7 @@ The builder shell is the first "process" to start although it is really just a f
 
 This internal shell reads commands from standard input.
 The kernel provides this input by reading the contents of the disk starting right after the kernel, starting with sector 8,
-which can be thought of as the first partition (/dev/hda1). Reading starts at sector 22 if stage1+stage2 is used.
+which can be thought of as the first partition (/dev/hda1). Reading starts at sector 160 if stage1+stage2 is used.
 
 Essentially, the kernel starts by executing the equivalent of this command:
 ```
@@ -152,7 +149,6 @@ The following system calls are implemented to some extent:
 * close
 * waitpid
 * execve
-* chmod
 * lseek
 * brk
 * chdir
@@ -187,7 +183,7 @@ The kernel "simulates" a spawn pattern with this pattern:
 ## Limitations
 
 * Only 14332 files can be created.
-* The total size of all files cannot exceed 536,870,911 bytes.
+* The total size of all files cannot exceed 1,811,939,328 bytes.
 * A file name is limited to 1K bytes.
 * Opening an existing file for write creates a new (empty) file with the same name.
     * Only the most recent file with the same name can be opened for read.
@@ -197,12 +193,11 @@ The kernel "simulates" a spawn pattern with this pattern:
 * Each process argument can only be 255 bytes long + 1 terminating zero byte
 * Only one child can be forked at a time.
 * Each process cannot exceed 670,793,728 bytes of memory
-* The total memory for all processes cannot exceed 805,306,368 bytes of memory
+* The total memory for all (suspended) parent processes cannot exceed 603,979,775 bytes of memory
 * waitpid returns zero from the child, regardless of the child's actual exit code.
 
 * Unimplemented syscalls always succeed (eax = 0).
-    * chdir always succeeds, regardless of whether the directory was previously created or not.
-    * chmod permissions are not saved or checked.
+    * For example, chmod always succeeds but permissions are not saved or checked.
 
 * Violating a limit will likely result in a random, mysterious failure or crash.
 
