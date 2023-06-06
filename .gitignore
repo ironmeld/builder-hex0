@@ -1,1 +1,3 @@
 BUILD
+hex2/*.o
+hex2/hex2
