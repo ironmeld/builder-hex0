@@ -60,6 +60,7 @@
 # write
 # src
 # hex0
+# flush_disk
 # internalshell
 
 
@@ -2207,6 +2208,11 @@ E9 %hex0_read_loop      # jmp hex0_read_loop
 52                         # push edx
 56                         # push esi
 
+83 3D &enable_flush 00     # cmp [enable_flush], 0
+74 !clear_args             # je clear_args
+E8 %flush_disk             # call flush_disk
+
+:clear_args
 # clear arguments
 BA 00 00 D0 04             # mov edx, 0x04D00000
 88 02                      # mov [edx], al
@@ -2257,6 +2263,76 @@ E8 %handle_syscall_execve  # call handle_syscall_execve
 58                         # pop eax
 C3                         # ret
 
+#------
+:enable_flush
+00 00 00 00
+
+#------------------------------------------------------------
+:flush_disk
+50                       # push eax
+# copy memory file /dev/hda to the boot disk
+BB &str_dev_hda          # mov ebx, str_dev_hda
+E8 %find_file            # call find_file
+83 F8 FF                 # cmp eax, -1
+75 !ok_flush             # jne ok_flush
+
+:error_exit
+BE &str_error_no_writes  # mov esi, str_error_no_write
+E8 %console_puts         # call console_puts
+
+# one space to flush last line
+B0 20                    # mov al, 20
+E8 %console_putc         # call console_putc
+58                       # pop eax
+C3                       # ret
+
+:ok_flush
+# get file address to read
+C1 E0 04                 # shl eax, 04
+05 00 00 00 01           # add eax, 0x01000000
+8B 70 04                 # mov esi, [eax+4]         ; file_address
+8B 58 08                 # mov ebx, [eax+8]         ; bytes_to_write = file_length
+
+# print length
+89 D8                    # mov eax, ebx
+B9 04 00 00 00           # mov ecx, 4
+:shift_loop
+C1 C8 18                 # ror eax, 24
+E8 %console_put_hex      # call console_put_hex
+49                       # dec ecx
+75 !shift_loop           # jnz shift_loop
+B0 0A                    # mov al, 0A
+E8 %console_putc         # call console_putc
+
+# set starting disk location to write
+31 C9                    # xor ecx, ecx
+41                       # inc ecx
+B6 00                    # mov dh, 0
+
+:sector_loop
+# copy 512 bytes from file to 16 bit buffer
+51                       # push ecx                 ; save disk location
+BF 00 A0 00 00           # mov edi, 0x000A000
+B9 00 02 00 00           # mov ecx, 0x200
+F3 A4                    # rep movsb
+59                       # pop ecx
+
+# now write from 16 bit buffer
+56                       # push esi                 ; save our location in the file
+BE 00 A0 00 00           # mov esi, 0x000A000
+B8 01 00 00 00           # mov eax, 0x0001          ; num_sectors = 1
+E8 %write_sectors        # call write_sectors
+5E                       # pop esi
+
+81 EB 00 02 00 00        # sub ebx, 0x200           ; bytes_to_write -= 512
+
+7F !sector_loop          # jg sector_loop
+
+B0 20                    # mov al, 20
+E8 %console_putc         # call console_putc
+58                       # pop eax
+C3                       # ret
+
 
 #------
 :str_build_finished
@@ -2285,8 +2361,8 @@ C7 05 00 00 00 01 08 00 00 00  # mov word [0x01000000], 0x00000008
 EB !after_set_stdin            # jmp after_set_stdin
 
 :stage2_stdin
-# Start reading stdin from sector 34, cyl 0, head 2 (sector 160)
-C7 05 00 00 00 01 22 00 02 00  # mov word [0x01000000], 0x00000008
+# Start reading stdin from sector 35, cyl 0, head 2 (sector 161)
+C7 05 00 00 00 01 23 00 02 00  # mov word [0x01000000], 0x00000008
 
 :after_set_stdin
 # start at "end of sector" to trigger an initial sector read
@@ -2318,10 +2394,19 @@ EB !process_command            # jmp process_command
 
 :check_hex0_command
 3C 68                          # cmp al, 'h'
-75 !call_handle_other_command  # jne call_handle_other_command
+75 !check_flush_command        # jne check_flush_command
 
 :handle_hex0_command
 E8 %hex0                       # call hex0
+EB !process_command            # jmp process_command
+
+:check_flush_command
+3C 66                          # cmp al, 'f'
+75 !call_handle_other_command  # jne call_handle_other_command
+
+:handle_flush_command
+E8 %read                       # call read    ; read the newline
+FF 05 &enable_flush            # inc dword [enable_flush]
 EB !process_command            # jmp process_command
 
 :call_handle_other_command
@@ -2332,73 +2417,13 @@ EB !process_command            # jmp process_command
 BE &str_build_finished         # mov esi, str_build_finished
 E8 %console_puts               # call console_puts
 
-# copy memory file /dev/hda to the boot disk
-BB &str_dev_hda                # mov ebx, str_dev_hda
-E8 %find_file                  # call find_file
-83 F8 FF                       # cmp eax, -1
-75 !ok_exit                    # jne ok_exit
-
-:error_exit
-BE &str_error_no_writes        # mov esi, str_error_no_write
-E8 %console_puts               # call console_puts
-
-# one space to flush last line
-B0 20                          # mov al, 20
-E8 %console_putc               # call console_putc
-EB !shell_reboot               # jmp shell_reboot
-
-:ok_exit
-# get file address to read
-C1 E0 04                       # shl eax, 04
-05 00 00 00 01                 # add eax, 0x01000000
-8B 70 04                       # mov esi, [eax+4]         ; file_address
-8B 58 08                       # mov ebx, [eax+8]         ; bytes_to_write = file_length
-
-# print length
-89 D8                          # mov eax, ebx
-B9 04 00 00 00                 # mov ecx, 4
-:shift_loop
-C1 C8 18                       # ror eax, 24
-E8 %console_put_hex            # call console_put_hex
-49                             # dec ecx
-75 !shift_loop                 # jnz shift_loop
-B0 0A                          # mov al, 0A
-E8 %console_putc               # call console_putc
-
-# set starting disk location to write
-31 C9                          # xor ecx, ecx
-41                             # inc ecx
-B6 00                          # mov dh, 0
-
-:sector_loop
-# copy 512 bytes from file to 16 bit buffer
-51                             # push ecx                 ; save disk location
-BF 00 A0 00 00                 # mov edi, 0x000A000
-B9 00 02 00 00                 # mov ecx, 0x200
-F3 A4                          # rep movsb
-59                             # pop ecx
-
-# now write from 16 bit buffer
-56                             # push esi                 ; save our location in the file
-BE 00 A0 00 00                 # mov esi, 0x000A000
-B8 01 00 00 00                 # mov eax, 0x0001          ; num_sectors = 1
-E8 %write_sectors              # call write_sectors
-5E                             # pop esi
-81 EB 00 02 00 00              # sub ebx, 0x200           ; bytes_to_write -= 512
-7F !sector_loop                # jg sector_loop
-
-B0 20                          # mov al, 20
-E8 %console_putc               # call console_putc
+E8 %flush_disk                 # call flush_disk
 
 :shell_reboot
 E9 %reboot                     # jmp reboot
 
 # sector padding
-00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00

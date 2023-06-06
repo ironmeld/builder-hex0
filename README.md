@@ -100,9 +100,10 @@ Essentially, the kernel starts by executing the equivalent of this command:
 cat /dev/hda1 | internalshell
 ```
 
-The internal shell includes two built-in commands:
+The internal shell includes three built-in commands:
 * src: create source file from stdin.
 * hex0: compile hex0 file to binary file.
+* f: write the /dev/hda file to the disk before executing the next command
 
 The internal shell is also able to execute any file that has previously been written (by hex0). Note that the internal shell only supports parsing exactly one argument that it will pass to the command. This is enough to support executing a new shell and passing it the name of a shell script to run.
 
@@ -133,6 +134,10 @@ hex0 $input_hex0_file $output_binary_file
 ```
 
 Reads hex0 from the input file, converts to binary, and writes to the output file.
+
+### The f (flush) command
+
+The `f` command writes the memory file named `/dev/hda` to the disk. The `f` command should immediately be followed by a newline character. Note the flush command does not execute immediately. The next command is read from the hard drive, then the flush is performed, and finally the command is executed. This supports performing a "kexec" command to launch another kernel. If the flush was performed immediately, it might overwrite the kexec command on the disk and so it is delayed until after the next command is read from the drive.
 
 
 ## The Hex0 Builder System Interface
