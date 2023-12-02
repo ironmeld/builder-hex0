@@ -35,12 +35,12 @@ cut ${PROGRAM}-from-hex2.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > ${PROGRAM}
 
 od -tx1 ${PROGRAM}.hex2.bin > ${PROGRAM}.hex2.hex
 od -tx1 ${PROGRAM}-from-hex2.bin > ${PROGRAM}-from-hex2.hex
-diff ${PROGRAM}.hex2.hex ${PROGRAM}-from-hex2.hex
+diff -u ${PROGRAM}.hex2.hex ${PROGRAM}-from-hex2.hex
 
-diff ${PROGRAM}.hex2.bin ${PROGRAM}-from-hex2.bin
+diff -u ${PROGRAM}.hex2.bin ${PROGRAM}-from-hex2.bin
 
 
-diff ${PROGRAM}.hex0 ${PROGRAM}-from-hex2.hex0 || true
+diff -u ${PROGRAM}.hex0 ${PROGRAM}-from-hex2.hex0 || true
 cut ${PROGRAM}-from-hex2.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > hex2.bin
 echo "This file must be a multiple of 512:"
 ls -l hex2.bin
