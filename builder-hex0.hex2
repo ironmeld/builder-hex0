@@ -14,8 +14,6 @@
 # console_putc_16
 # console_put_hex_16
 #
-# get_drive_geometry
-# next_sector
 # read_sectors_16
 # write_sectors_16
 #
@@ -73,8 +71,7 @@
 # 01000010 - 0107FFFF file descriptors (16 bytes each * 32K)
 #                      { unused, address, length, unused }
 # 01000000 - 0100000F stdin disk locator
-#                      { cylinder/sector (2 bytes), head (1 byte), unused byte,
-#                        offset (2 bytes), unused }
+#                      { logical sector (4 bytes), offset (2 bytes), unused }
 #   201800 -   FFFFFF file names 6..14335
 #   201400 -   2017FF file name 5
 #   201000 -   2013FF file name 4
@@ -114,8 +111,11 @@
 #   dl: boot drive
 #
 # We cannot be sure the registers are initialized to zero so we
-# do that first. We far jump to kernel_main in order to set CS.
-31 C0           # xor ax, ax
+# do that first. We far jump in order to set CS.
+# Use special encoding of "xor ax, ax" to appease some BIOSes.
+33 C0           # xor ax, ax
+EA $setcs 00 00 # jmp far setcs
+:setcs
 8E D8           # mov ds, ax
 8E C0           # mov es, ax
 8E D0           # mov ss, ax
@@ -206,173 +206,178 @@ C3                   # ret
 :boot_drive
 80
 
-#-------------
-:max_head
-0F
+# align address packet to 16 byte boundary
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
 #-------------
-:max_sector
-3F
-
-
-#------------------------
-:get_drive_geometry
-# input:
-#   dl: drive
-#
-06                 # push es
-57                 # push di
-
-# https://en.wikipedia.org/wiki/INT_13H#INT_13h_AH=08h:_Read_Drive_Parameters
-31 FF              # xor di, di
-8E C7              # mov es, di
-B4 08              # mov ah, 8       ; get drive parameters
-CD 13              # int 0x13
-
-88 36 $max_head    # mov [max_head], dh  ; max_head
-80 E1 3F           # and cl, 0x3f
-88 0E $max_sector  # mov [max_sector], cl  ; num_sectors
-
-5F                 # pop di
-07                 # pop es
-C3                 # ret
-
-
-#------------------------
-:next_sector
-# inputs:
-#   cx: cylinder/sector
-#   dh: head
-#
-50                      # push ax
-
-88 C8                   # mov al, cl             ; get sector number
-24 3F                   # and al, 0x3f
-3A 06 $max_sector       # cmp al, [max_sector]   ; if sector_num == max_sector
-74 !next_head           # je next_head           ;      goto next_head
-FE C1                   # inc cl                 ; else sector_num++;
-EB !next_sector_finish  # jmp next_sector_finish
-
-:next_head
-3A 36 $max_head         # cmp dh, [max_head]     ; if head_num == max_head
-74 09                   # je next_cylinder       ;      goto next_cyclinder
-FE C6                   # inc dh                 ; else head_num++
-80 E1 C0                # and cl, 0xc0           ;      sector_num = 1
-FE C1                   # inc cl                 ;
-EB !next_sector_finish  # jmp next_sector_finish
-
-:next_cylinder
-80 FD FF                # cmp ch, 0xff           ; if cylinder_low == 255
-74 !next_cyl_high       # je next_cyl_high
-
-:next_cyl_low
-30 F6                   # xor dh, dh             ; head_num = 0
-80 E1 C0                # and cl, 0xc0           ; sector_num = 0
-81 C1 01 01             # add cx, 0x0101         ; cylinder_low++, sector_num++
-EB !next_sector_finish  # jmp next_sector_finish
-
-:next_cyl_high
-30 F6                   # xor dh, dh             ; head_num = 0
-81 E1 C0 00             # and cx, 0x00C0         ; cylinder_low = 0, sector_num = 0
-80 C1 41                # add cl, 0x41           ; cylinder_high++, sector_num++
-
-:next_sector_finish
-58                      # pop ax
-C3                      # ret
-
+:addr_packet
+10 00
+:num_sectors_bios
+01 00
+:dest_offset
+00 00
+:dest_segment
+00 00
+:starting_lba
+00 00 00 00 00 00 00 00
+:end_addr_packet
 
 #------------------------
 :read_sectors_16
 # inputs:
 #   di: dest_addr
-#   cx: cylinder/sector
-#   dh: head
+#   ecx: first logical sector
 #   ax: num_sectors
 #
 # outputs:
 #   di: next byte to write to
-#   cx,dh: next disk sector to read from
+#   ecx: next disk sector to read from
 #
-50                 # push ax
-53                 # push bx
-56                 # push si
+50              # push ax
+53              # push bx
+56              # push si
 
-89 C6              # mov si, ax      ; si=num_sectors
-89 FB              # mov bx, di      ; int 13 writes to bx
+1E              # push ds
+5B              # pop bx
+89 1E $dest_segment     # mov word ptr [dest_segment], bx
+89 C6           # mov si, ax      ; si=num_sectors
+89 FB           # mov bx, di      ; int 13 writes to bx
 
 :read_one_loop
-8A 16 $boot_drive  # mov dl, [boot_drive]
-B4 02              # mov ah, 2        ; rw mode = 02 (read)
-B0 01              # mov al, 1        ; num_sectors
-CD 13              # int 0x13
-72 !read_one_loop  # jnc read_one_loop
-3C 01              # cmp al, 1
-75 !read_one_loop  # jnz read_one_loop
+89 36 $num_sectors_bios # mov word ptr [num_sectors_bios], si
+89 1E $dest_offset      # mov word ptr [dest_offset], bx
+66 89 0E $starting_lba  # mov dword ptr [starting_lba], ecx
+8A 16 $boot_drive       # mov dl, [boot_drive]
+B4 42           # mov ah, 0x42        ; rw mode = 42 (read LBA)
+56              # push si
+BE $addr_packet # mov si, addr_packet      ; disk address packet
+CD 13           # int 0x13
+72 !read_error  # jc read_error
 
-# advance and maybe continue
-E8 @next_sector    # call next_sector
+8B 3E $num_sectors_bios # mov di, word ptr [num_sectors_bios]  ; number of sectors actually read
+85 FF           # test di, di
+74 !read_error  # jz read_error
 
-# we read one sector, advance
-81 C3 00 02        # add bx, 0x200
+# we read some sectors, advance
+5E              # pop si
+29 FE           # sub si, di    ; num_sectors -= num_sectors_bios
+66 0F B7 C7     # movzx eax, di
+66 01 C1        # add ecx, eax
+C1 E7 09        # shl di, 9     ; 512 == 2^9
+01 FB           # add bx, di
 
-4E                 # dec si            ; num_sectors--
-75 !read_one_loop  # jnz read_one_loop
+85 F6           # test si, si
+75 !read_one_loop       # jnz read_one_loop
 
-89 DF              # mov di, bx
+89 DF           # mov di, bx
 
-5E                 # pop si
-5B                 # pop bx
-58                 # pop ax
-C3                 # ret
+5E              # pop si
+5B              # pop bx
+58              # pop ax
+CB              # retf
+
+:read_error
+# Print the error code, followed by the disk address packet
+8A 16 $boot_drive       # mov dl, [boot_drive]
+88 E0           # mov al, ah
+9A &console_put_hex_16  # call console_put_hex_16
+B0 20           # mov al, 0x20
+9A &console_putc_16     # call console_putc_16
+BE $addr_packet # mov si, addr_packet      ; disk address packet
+:read_debug
+8A 04           # mov al, [si]
+9A &console_put_hex_16  # call console_put_hex_16
+46              # inc si
+81 FE $end_addr_packet  # cmp si, end_addr_packet
+75 !read_debug  # jnz read_debug
+
+# Reset the disk subsystem, then try again
+8A 16 $boot_drive       # mov dl, [boot_drive]
+31 C0           # xor ax, ax
+CD 13           # int 0x13
+5E              # pop si
+eb !read_one_loop
 
 
 #------------------------
 :write_sectors_16
 # inputs:
 #   si: source_addr
-#   cx: cylinder/sector
-#   dh: head
+#   ecx: first logical sector
 #   ax: num_sectors
 #
 # outputs:
 #   si: next byte to read from
-#   cx,dh: next disk sector to read from
+#   ecx: next disk sector to write to
 #
-50                  # push ax
-53                  # push bx
-57                  # push di
+50              # push ax
+53              # push bx
+57              # push di
 
-89 C7               # mov di, ax      ; di=num_sectors
-89 F3               # mov bx, si      ; int 13 reads from [bx]
+1E              # push ds
+5B              # pop bx
+89 1E $dest_segment     # mov word ptr [dest_segment], bx
+89 C7           # mov di, ax      ; di=num_sectors
+89 F3           # mov bx, si      ; int 13 reads from [bx]
 
 :write_one_loop
-8A 16 $boot_drive   # mov dl, [boot_drive]
-B4 03               # mov ah, 3       ; rw mode = 03 (write)
-B0 01               # mov al, 1       ; num_sectors
-CD 13               # int 0x13
-72 !write_one_loop  # jnc write_one_loop
-3C 01               # cmp al, 1
-75 !write_one_loop  # jnz write_one_loop
+89 3E $num_sectors_bios # mov word ptr [num_sectors_bios], di
+89 1E $dest_offset      # mov word ptr [dest_offset], bx
+66 89 0E $starting_lba  # mov dword ptr [starting_lba], ecx
+8A 16 $boot_drive       # mov dl, [boot_drive]
+B4 43           # mov ah, 0x43       ; rw mode = 43 (write LBA)
+57              # push di
+BF $addr_packet # mov di, addr_packet      ; disk address packet
+CD 13           # int 0x13
+72 !write_error # jc write_error
 
-# advance and maybe continue
-E8 @next_sector     # call next_sector
+8B 36 $num_sectors_bios # mov si, word ptr [num_sectors_bios]  ; number of sectors actually written
+85 F6           # test si, si
+74 !write_error # jz write_error
 
-# we write one sector, advance
-81 C3 00 02         # add bx, 0x200
+# we wrote some sectors, advance
+5F              # pop di
+29 F7           # sub di, si    ; num_sectors -= num_sectors_bios
+66 0F B7 C6     # movzx eax, si
+66 01 C1        # add ecx, eax
+C1 E6 09        # shl si, 9     ; 512 == 2^9
+01 F3           # add bx, si
 
-4F                  # dec di          ; num_sectors--
-75 !write_one_loop  # jnz write_one_loop
+85 FF           # test di, di
+75 !write_one_loop      # jnz write_one_loop
 
-89 DE               # mov si, bx
+89 DE           # mov si, bx
 
-5F                  # pop di
-5B                  # pop bx
-58                  # pop ax
-C3                  # ret
+5F              # pop di
+5B              # pop bx
+58              # pop ax
+CB              # retf
+
+:write_error
+# Print the error code, followed by the disk address packet
+8A 16 $boot_drive       # mov dl, [boot_drive]
+88 E0           # mov al, ah
+9A &console_put_hex_16  # call console_put_hex_16
+B0 20           # mov al, 0x20
+9A &console_putc_16     # call console_putc_16
+BF $addr_packet # mov di, addr_packet      ; disk address packet
+:write_debug
+8A 05           # mov al, [di]
+9A &console_put_hex_16  # call console_put_hex_16
+47              # inc di
+81 FF $end_addr_packet  # cmp di, end_addr_packet
+75 !write_debug # jnz write_debug
+
+# Reset the disk subsystem, then try again
+8A 16 $boot_drive       # mov dl, [boot_drive]
+31 C0           # xor ax, ax
+CD 13           # int 0x13
+5F              # pop di
+eb !write_one_loop
 
 
-#alignment only
-00
+# align GDT to 16 byte boundary
+00 00
 
 #---------------------------------------------
 # The Global Descriptor Table for 32 bit mode.
@@ -429,6 +434,11 @@ FF FF # limit 0:15
 27 00        #  length
 &GDT_start   #  GDT_start
 
+#------
+:Saved_GDT_locator
+00 00        #  length
+00 00 00 00  #  GDT_start
+
 
 #------------------------
 :kernel_main
@@ -437,7 +447,6 @@ FF FF # limit 0:15
 #
 # Load the kernel and jump to it
 88 16 $boot_drive       # mov [boot_drive], dl
-E8 @get_drive_geometry  # call get_drive_geometry()
 
 # if this is not stage1 skip load; kernel is already loaded
 B8 $kernel_entry        # mov ax, $kernel_entry
@@ -445,17 +454,74 @@ B8 $kernel_entry        # mov ax, $kernel_entry
 75 !after_load          # jne after_load
 
 BF 00 7E                # mov di, 0x7E00   ; place remaining code after MBR in memory
-B8 06 00                # mov ax, 0x0006   ; num_sectors = 6
-B9 02 00                # mov cx, 0x0002   ; cylinder = 0, sector_num = 0x02
-B6 00                   # mov dh, 0        ; head = 0
+B8 06 00                # mov ax, 6        ; num_sectors = 6
+66 B9 01 00 00 00       # mov ecx, 1       ; starting logical sector = 1
 E8 @read_sectors_16     # call read_sectors_16
 
 :after_load
-# start 32bit mode
+# check if A20 line needs handling
+9C                      # pushf
+1E                      # push ds
+06                      # push es
+FA                      # cli
+
+31 C0                   # xor ax, ax ; ax = 0
+8E C0                   # mov es, ax
+
+F7 D0                   # not ax ; ax = 0xFFFF
+8E D8                   # mov ds, ax
+
+BF 00 05                # mov di, 0x0500
+BE 10 05                # mov si, 0x0510
+
+26 8A 05                # mov al, byte ptr es:[di]
+50                      # push ax
+
+8A 04                   # mov al, byte ptr ds:[si]
+50                      # push ax
+
+26 C6 05 00             # mov byte ptr es:[di], 0x00
+C6 04 FF                # mov byte ptr ds:[si], 0xFF
+
+26 80 3D FF             # cmp byte ptr es:[di], 0xFF
+
+58                      # pop ax
+88 04                   # mov byte ptr ds:[si], al
+
+58                      # pop ax
+26 88 05                # mov byte ptr es:[di], al
+
+B8 00 00                # mov ax, 0
+74 !check_a20_exit      # je check_a20_exit
+
+B8 01 00                # mov ax, 1
+
+:check_a20_exit
+FB                      # sti
+07                      # pop es
+1F                      # pop ds
+9D                      # popf
+
+A3 $Init_A20            # mov word ptr [Init_A20], ax
+85 C0                   # test ax, ax
+75 !init_no_a20         # jnz init_no_a20
+
+# enable Gate A20
 B8 01 24                # mov ax,2401h     # enable A20 line
 CD 15                   # int 15h
 
+:init_no_a20
+# start 32bit mode
 FA                      # cli
+0F 01 06 $Saved_GDT_locator # sgdt Saved_GDT_locator
+EB !past_MBR            # jmp past_mbr
+90                      # nop    ; padding to align MBR
+90                      # nop    ; padding to align MBR
+90                      # nop    ; padding to align MBR
+90                      # nop    ; padding to align MBR
+# This is the DOS/MBR identifier at offset 510:
+55 AA
+:past_MBR
 0F 01 16 $GDT_locator   # lgdt GDT_locator
 0F 20 C0                # mov eax, cr0
 66 83 C8 01             # or eax, 0x01
@@ -498,7 +564,11 @@ C6 43 05 8E           # mov byte [ebx + 5], flags = 8E
 # load the interrupt table
 FA                    # cli
 0F 01 1D &IDT_locator_32  # lidt IDT_locator_32
+8B 1D &have_userspace # mov ebx, [have_userspace]
+85 DB                 # test ebx
+74 !before_userspace  # jz before_userspace
 FB                    # sti
+:before_userspace
 5B                    # pop ebx
 C3                    # ret
 
@@ -507,6 +577,16 @@ C3                    # ret
 :stub_interrupt_handler
 CF                    # iret
 
+#----------------------------------------
+:Init_A20
+00 00
+
+#----------------------------------------
+:have_userspace
+00 00 00 00
+
+# align IDT locator to 16 byte boundary
+00 00 00 00 00 00 00 00 00 00 00 00
 
 #----------------------------------------
 :IDT_locator_32
@@ -530,49 +610,53 @@ FF 07        #  length
 
 #----------------------------------------
 :enter_16bit_real
-FA                    # cli
-A3 08 7B 00 00        # mov [0x7B08], eax  ; preserve so we can use these locally
-89 15 14 7B 00 00     # mov [0x7B14], edx  ;
-5A                    # pop edx            ; capture return address
-89 25 04 7B 00 00     # mov [0x7B04], esp  ; capture stack
+FA                        # cli
+A3 08 7B 00 00            # mov [0x7B08], eax  ; preserve so we can use these locally
+89 15 14 7B 00 00         # mov [0x7B14], edx  ;
+5A                        # pop edx            ; capture return address
+89 25 04 7B 00 00         # mov [0x7B04], esp  ; capture stack
 
 # The following far jump sets CS to a 16-bit protected mode selector
 # and the segment registers are also set to 16-bit protected mode selectors.
 # This is done prior to entering real mode.
-EA &setup_16bit 18 00  # jmp 0x18:setup_16bit
+EA &setup_16bit 18 00 # jmp 0x18:setup_16bit
 #------
 :setup_16bit
-B8 20 00              # mov eax, 0x0020
-8E D0                 # mov ss, eax
-8E D8                 # mov ds, eax
-8E C0                 # mov es, eax
-8E E8                 # mov gs, eax
-8E E0                 # mov fs, eax
-BC 00 7B              # mov sp, 0x7B00
-0F 20 C0              # mov eax, cr0
-66 83 E0 FE           # and eax, 0xfffffffe  ; clear protected mode
-0F 22 C0              # mov cr0, eax
+B8 20 00                  # mov ax, 0x0020
+8E D0                     # mov ss, ax
+8E D8                     # mov ds, ax
+8E C0                     # mov es, ax
+8E E8                     # mov gs, ax
+8E E0                     # mov fs, ax
+BC 00 7B                  # mov sp, 0x7B00
+0F 20 C0                  # mov eax, cr0
+66 83 E0 FE               # and eax, 0xfffffffe  ; clear protected mode
+0F 22 C0                  # mov cr0, eax
 # The following far jump sets CS to a 16-bit real mode segment
 # and the segment registers are also set to real mode segments.
-EA &real_mode        # jmp 0000:XXXX  real_mode
+EA &real_mode             # jmp 0000:XXXX  real_mode
 #------
 :real_mode
 B8 00 00                  # mov ax, 0x0
 8E D8                     # mov ds, ax
 8E E0                     # mov fs, ax
 8E E8                     # mov gs, ax
-
-EB !past_MBR              # jmp past_mbr
-90                        # nop    ; padding to align MBR
-# This is the DOS/MBR identifier at offset 510:
-55 AA
-:past_MBR
 8E D0                     # mov ss, ax
 8E C0                     # mov es, ax
 BC 00 7B                  # mov sp, 0x7B00
 FA                        # cli
 0F 01 1E $IDT_locator_16  # lidt IDT_locator_16
+0F 01 16 $Saved_GDT_locator # lgdt Saved_GDT_locator
 FB                        # sti
+
+# Reset Gate A20 if needed
+A1 $Init_A20              # mov ax, word ptr [Init_A20]
+85 C0                     # test ax, ax
+75 !enter_no_a20          # jnz enter_no_a20
+B8 00 24                  # mov ax,2400h     # disable A20 line
+CD 15                     # int 15h
+
+:enter_no_a20
 # Using retf to set CS comes from here:
 # https://stackoverflow.com/questions/26448480/bios-interrupts-in-protected-mode
 # This page recommends a far jump followed by sti:
@@ -583,6 +667,9 @@ A1 08 7B                  # mov ax, [0x7B08]  ; restore from above
 8B 16 14 7B               # mov dx, [0x7B14]
 CB                        # retf
 
+# align IDT locator to 16-byte boundary
+00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
 #------
 :IDT_locator_16
 FF 03
@@ -591,16 +678,28 @@ FF 03
 
 #----------------------------------------
 :resume_32bit_mode
+50                    # push ax
+A1 $Init_A20          # mov ax, word ptr [Init_A20]
+85 C0                 # test ax, ax
+75 !exit_no_a20       # jnz exit_no_a20
+
+# start 32bit mode
+B8 01 24              # mov ax,2401h     # enable A20 line
+CD 15                 # int 15h
+
+:exit_no_a20
+58                    # pop ax
 FA                    # cli
 A3 08 7B              # mov [0x7B08], ax  ; preserve, they might be return values from 16 bit
 89 16 14 7B           # mov [0x7B14], dx
 5A                    # pop dx      ; carry the return IP in dx
 58                    # pop ax      ; CS
+0F 01 06 $Saved_GDT_locator # sgdt Saved_GDT_locator
 0F 01 16 $GDT_locator # lgdt GDT_locator
 0F 20 C0              # mov eax, cr0
 66 83 C8 01           # or eax, 0x01         ; enable protected mode
 0F 22 C0              # mov cr0, eax
-EA $restore_32bit 08 00        # jmp restore_32bit
+EA $restore_32bit 08 00     # jmp restore_32bit
 #------
 :restore_32bit
 B8 10 00 00 00        # mov eax, 0x0010      ; data descriptor
@@ -610,7 +709,7 @@ B8 10 00 00 00        # mov eax, 0x0010      ; data descriptor
 8E E0                 # mov fs, eax
 8E E8                 # mov gs, eax
 8B 25 04 7B 00 00     # mov esp, [0x7B04]   ; restore, (saved in enter_16bit_mode)
-E8 %setup_int_handlers  # call setup_int_handlers
+E8 %setup_int_handlers      # call setup_int_handlers
 52                    # push edx            ; setup our return location
 # These restore the 16 bit portion of these registers, which may be a
 # return value from a 16 bit function, and they also restore any previous high
@@ -663,8 +762,7 @@ C3                      # ret
 :read_sectors
 # inputs:
 #   di: dest_addr
-#   cx: cylinder/sector
-#   dh: head
+#   ecx: first logical sector
 #   ax: num_sectors
 #
 E8 %enter_16bit_real    # call enter_16bit_real
@@ -677,8 +775,7 @@ C3                      # ret
 :write_sectors
 # inputs:
 #   si: source_addr
-#   cx: cylinder/sector
-#   dh: head
+#   ecx: first logical sector
 #   ax: num_sectors
 #
 E8 %enter_16bit_real    # call enter_16bit_real
@@ -1146,8 +1243,7 @@ C3                       # ret
 # stdin disk position is stored in fd 0
 # get current position
 BB 00 00 00 01          # mov ebx, 0x01000000
-66 8B 0B                # mov cx, [ebx]
-8A 73 02                # mov dh, [ebx+2]
+8B 0B                   # mov ecx, [ebx]
 31 C0                   # xor eax, eax
 66 8B 43 04             # mov ax, [ebx+4]
 
@@ -1164,8 +1260,7 @@ BF 00 A0 00 00          # mov edi, 0x000A000
 B8 01 00 00 00          # mov eax, 0x0001   ; num_sectors = 1
 E8 %read_sectors        # call read_sectors
 # save new location and offset
-66 89 0b                # mov [ebx], cx
-88 73 02                # mov [ebx+2], dh
+89 0B                   # mov [ebx], ecx
 31 C0                   # xor eax, eax
 
 # move block to device buffer
@@ -1684,7 +1779,7 @@ C1 E0 0C              # shl eax, 0x0C
 F3 A4                 # rep movsb
 
 8B 70 24              # mov esi, [eax+0x24]                 ; deallocate memory for saved process
-89 35 &next_save_process_address  #  mov [next_save_process_address], esi
+89 35 &next_save_process_address  # mov [next_save_process_address], esi
 
 8B 60 0C              # mov esp, [eax+0xc]       ; restore stack pointer
 8B 70 14              # mov esi, [eax+0x14]      ; restore brk pointer
@@ -2006,12 +2101,9 @@ CD 80                   # int 80
 :read_write_loop
 85 C9                   # test ecx, ecx
 74 !src_finish          # jz src_finish
-BF 00 02 04 00          # mov edi, 0x00040200     ; scratch buffer
-57                      # push edi                ; save buffer address
 31 DB                   # xor ebx, ebx            ; ebx=0=stdin
 E8 %read                # call read
 89 D3                   # mov ebx, edx            ;  prepare to write
-5E                      # pop esi                 ; restore buffer address to esi
 E8 %write               # call write
 49                      # dec ecx   ; count--
 EB !read_write_loop     # jmp read_write_loop
@@ -2225,6 +2317,11 @@ B9 FF 07 00 00             # mov ecx, 0x000007FF
 49                         # dec ecx
 75 !other_args_zeroloop    # jnz other_args_zeroloop
 
+# no more reading from disk - enable interrupts
+40                         # inc eax
+A3 &have_userspace         # mov [have_userspace], eax
+FB                         # sti
+
 BA 01 00 D0 04             # mov edx, 0x04D00001
 :get_program_name
 E8 %read                   # call read
@@ -2306,8 +2403,6 @@ E8 %console_putc         # call console_putc
 
 # set starting disk location to write
 31 C9                    # xor ecx, ecx
-41                       # inc ecx
-B6 00                    # mov dh, 0
 
 :sector_loop
 # copy 512 bytes from file to 16 bit buffer
@@ -2356,13 +2451,13 @@ B8 &kernel_entry               # mov eax, $kernel_entry
 3D 00 7C 00 00                 # cmp eax, 0x00007C00
 75 !stage2_stdin               # jne stage2_stdin
 
-# Start reading stdin from sector 8, cyl 0, head 0
+# Start reading stdin from logical sector 8
 C7 05 00 00 00 01 08 00 00 00  # mov word [0x01000000], 0x00000008
 EB !after_set_stdin            # jmp after_set_stdin
 
 :stage2_stdin
-# Start reading stdin from sector 35, cyl 0, head 2 (sector 161)
-C7 05 00 00 00 01 23 00 02 00  # mov word [0x01000000], 0x00000008
+# Start reading stdin from logical sector 165
+C7 05 00 00 00 01 A5 00 00 00  # mov word [0x01000000], 0x000000A5
 
 :after_set_stdin
 # start at "end of sector" to trigger an initial sector read
@@ -2423,7 +2518,27 @@ E8 %flush_disk                 # call flush_disk
 E9 %reboot                     # jmp reboot
 
 # sector padding
-00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
