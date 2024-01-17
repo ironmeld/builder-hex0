@@ -32,6 +32,7 @@ all: BUILD/builder-hex0-self-built.bin BUILD/builder-hex0-x86-stage1.img
 
 # The (full) builder-hex0 built by a (full) builder-hex0 (built by the mini builder)
 BUILD/builder-hex0-self-built.bin: BUILD/builder-hex0-mini-built.bin BUILD/builder-hex0.src build.sh | BUILD
+	echo "Build the (full) builder-hex0 by a (full) builder-hex0 (built by the mini builder)"
 	# params: boot sectors to use, shell source to append, name of binary to extract
 	(cd BUILD && ../build.sh builder-hex0-mini-built.bin builder-hex0.src builder-hex0-self-built.bin)
 	# verify that the self-built binary is the same as the mini-built binary
@@ -45,6 +46,7 @@ BUILD/builder-hex0.src: builder-hex0.hex0 hex0-to-src.sh | BUILD
 
 # The "full" builder-hex0 built by the self-built mini builder
 BUILD/builder-hex0-mini-built.bin: BUILD/builder-hex0-mini-self-built.bin builder-hex0.hex0 build-mini.sh BUILD/builder-hex0-seed.bin | BUILD
+	echo "Build The full builder-hex0 by the self-built mini builder"
 	# params: boot sectors to use, source to append, size of binary to extract, name of extracted binary
 	(cd BUILD && ../build-mini.sh builder-hex0-mini-self-built.bin ../builder-hex0.hex0 4096 builder-hex0-mini-built.bin)
 	# verify that it matches the seed
@@ -53,6 +55,7 @@ BUILD/builder-hex0-mini-built.bin: BUILD/builder-hex0-mini-self-built.bin builde
 
 # builder-hex0-mini built by the mini builder built by the seed mini bulder
 BUILD/builder-hex0-mini-self-built.bin: BUILD/builder-hex0-mini-seed-built.bin builder-hex0-mini.hex0 build-mini.sh | BUILD
+	echo "Build builder-hex0-mini by the mini builder built by the seed mini bulder"
 	# params: boot sectors to use, source to append, size of binary to extract, name of extracted binary
 	(cd BUILD && ../build-mini.sh builder-hex0-mini-seed-built.bin ../builder-hex0-mini.hex0 512 builder-hex0-mini-self-built.bin)
 	# verify that the self-built mini builder is the same as the seed-built binary
@@ -61,6 +64,7 @@ BUILD/builder-hex0-mini-self-built.bin: BUILD/builder-hex0-mini-seed-built.bin b
 
 # builder-hex0-mini built by the seed mini builder
 BUILD/builder-hex0-mini-seed-built.bin: BUILD/builder-hex0-mini-seed.bin builder-hex0-mini.hex0 build-mini.sh | BUILD
+	echo "Build builder-hex0-mini with the seed mini builder"
 	# params: boot sectors to use, source to append, size of binary to extract, name of binary to extract
 	(cd BUILD && ../build-mini.sh builder-hex0-mini-seed.bin ../builder-hex0-mini.hex0 512 builder-hex0-mini-seed-built.bin)
 	# verify that the binary built by the seed binary is the same as the seed binary
@@ -85,6 +89,9 @@ BUILD/builder-hex0-x86-stage1.img: builder-hex0-x86-stage1.hex0 | BUILD
 
 BUILD:
 	mkdir BUILD
+
+test:
+	./test-stages.sh
 
 clean:
 	rm -rf BUILD

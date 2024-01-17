@@ -18,11 +18,11 @@ dd if=/dev/zero of="$IMG" bs=512 count=2064384
 # Write the stage1 boot seed
 dd if=$STAGE1 of="$IMG" conv=notrunc
 
-# Place stage2 starting at sector 2
+# Place stage2 starting at sector LBA sector 1
 dd if="$STAGE2" of="$IMG" seek=1 bs=512 conv=notrunc
 
-# Place source starting at sector 160
-dd if="$SRC" of="$IMG" seek=159 bs=512 conv=notrunc
+# Place source starting at LBA sector 167
+dd if="$SRC" of="$IMG" seek=167 bs=512 conv=notrunc
 
 # Launch build
 qemu-system-x86_64 $ENABLE_KVM -m 4G -nographic -machine kernel-irqchip=split -drive file="$IMG",format=raw --no-reboot | tee "$LOG"
