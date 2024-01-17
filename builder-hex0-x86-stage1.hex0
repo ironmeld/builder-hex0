@@ -35,7 +35,7 @@
 # do that first. We far jump in order to set CS.
 # Use special encoding of "xor ax, ax" to appease some BIOSes.
 33 C0             # xor ax, ax
-EA 07 7C 00 00    # jmp far setcs
+EA 07 7C  00 00   # jmp far setcs
 #:setcs
 8E D8             # mov ds, ax
 8E C0             # mov es, ax
@@ -145,7 +145,7 @@ E9 95 01          # jmp stage2_entry
 B4 02                   # mov ah, 2        ; rw mode = 02 (read)
 B0 01                   # mov al, 1        ; num_sectors
 CD 13                   # int 0x13
-72 14                   # jnc read_error
+72 14                   # jc read_error
 
 # Check for nonzero, not 1, because some BIOSes may read more
 # sectors for future use, and wrongly report it
@@ -190,7 +190,7 @@ FF 01                   ; last_byte
 57                      # push di
 
 # get current position
-BB 91 7C  # mov bx, last_read_location
+BB 91 7C                # mov bx, last_read_location
 8B 0F                   # mov cx, [bx]
 8A 77 02                # mov dh, [bx+2]
 8B 47 03                # mov ax, [bx+3]

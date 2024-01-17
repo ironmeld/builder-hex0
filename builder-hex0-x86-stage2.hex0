@@ -115,7 +115,7 @@
 # do that first. We far jump in order to set CS.
 # Use special encoding of "xor ax, ax" to appease some BIOSes.
 33 C0           # xor ax, ax
-EA 07 7E 00 00  # jmp far setcs
+EA 07 7E  00 00 # jmp far setcs
 #:setcs
 8E D8           # mov ds, ax
 8E C0           # mov es, ax
@@ -123,7 +123,7 @@ EA 07 7E 00 00  # jmp far setcs
 BC 00 7B        # mov sp, 0x7B00
 FC              # cld ; clear direction flag
 
-E9 80 01        # jmp kernel_main
+E9 80 01           # jmp kernel_main
 
 
 #------------------------
@@ -245,22 +245,22 @@ C3                   # ret
 
 1E              # push ds
 5B              # pop bx
-89 1E 66 7E     # mov word ptr [dest_segment], bx
+89 1E 66 7E             # mov word ptr [dest_segment], bx
 89 C6           # mov si, ax      ; si=num_sectors
 89 FB           # mov bx, di      ; int 13 writes to bx
 
 #:read_one_loop
-89 36 62 7E     # mov word ptr [num_sectors_bios], si
-89 1E 64 7E     # mov word ptr [dest_offset], bx
-66 89 0E 68 7E  # mov dword ptr [starting_lba], ecx
-8A 16 50 7E     # mov dl, [boot_drive]
+89 36 62 7E             # mov word ptr [num_sectors_bios], si
+89 1E 64 7E             # mov word ptr [dest_offset], bx
+66 89 0E 68 7E          # mov dword ptr [starting_lba], ecx
+8A 16 50 7E             # mov dl, [boot_drive]
 B4 42           # mov ah, 0x42        ; rw mode = 42 (read LBA)
 56              # push si
 BE 60 7E        # mov si, addr_packet      ; disk address packet
 CD 13           # int 0x13
 72 21           # jc read_error
 
-8B 3E 62 7E     # mov di, word ptr [num_sectors_bios]  ; number of sectors actually read
+8B 3E 62 7E             # mov di, word ptr [num_sectors_bios]  ; number of sectors actually read
 85 FF           # test di, di
 74 19           # jz read_error
 
@@ -273,7 +273,7 @@ C1 E7 09        # shl di, 9     ; 512 == 2^9
 01 FB           # add bx, di
 
 85 F6           # test si, si
-75 CA           # jnz read_one_loop
+75 CA                   # jnz read_one_loop
 
 89 DF           # mov di, bx
 
@@ -284,21 +284,21 @@ CB              # retf
 
 #:read_error
 # Print the error code, followed by the disk address packet
-8A 16 50 7E     # mov dl, [boot_drive]
+8A 16 50 7E             # mov dl, [boot_drive]
 88 E0           # mov al, ah
-9A 2A 7E 00 00  # call console_put_hex_16
+9A 2A 7E 00 00          # call console_put_hex_16
 B0 20           # mov al, 0x20
-9A 14 7E 00 00  # call console_putc_16
+9A 14 7E 00 00          # call console_putc_16
 BE 60 7E        # mov si, addr_packet      ; disk address packet
 #:read_debug
 8A 04           # mov al, [si]
-9A 2A 7E 00 00  # call console_put_hex_16
+9A 2A 7E 00 00          # call console_put_hex_16
 46              # inc si
-81 FE 70 7E     # cmp si, end_addr_packet
+81 FE 70 7E             # cmp si, end_addr_packet
 75 F2           # jnz read_debug
 
 # Reset the disk subsystem, then try again
-8A 16 50 7E     # mov dl, [boot_drive]
+8A 16 50 7E             # mov dl, [boot_drive]
 31 C0           # xor ax, ax
 CD 13           # int 0x13
 5E              # pop si
@@ -323,22 +323,22 @@ eb 96
 
 1E              # push ds
 5B              # pop bx
-89 1E 66 7E     # mov word ptr [dest_segment], bx
+89 1E 66 7E             # mov word ptr [dest_segment], bx
 89 C7           # mov di, ax      ; di=num_sectors
 89 F3           # mov bx, si      ; int 13 reads from [bx]
 
 #:write_one_loop
-89 3E 62 7E     # mov word ptr [num_sectors_bios], di
-89 1E 64 7E     # mov word ptr [dest_offset], bx
-66 89 0E 68 7E  # mov dword ptr [starting_lba], ecx
-8A 16 50 7E     # mov dl, [boot_drive]
+89 3E 62 7E             # mov word ptr [num_sectors_bios], di
+89 1E 64 7E             # mov word ptr [dest_offset], bx
+66 89 0E 68 7E          # mov dword ptr [starting_lba], ecx
+8A 16 50 7E             # mov dl, [boot_drive]
 B4 43           # mov ah, 0x43       ; rw mode = 43 (write LBA)
 57              # push di
 BF 60 7E        # mov di, addr_packet      ; disk address packet
 CD 13           # int 0x13
 72 21           # jc write_error
 
-8B 36 62 7E     # mov si, word ptr [num_sectors_bios]  ; number of sectors actually written
+8B 36 62 7E             # mov si, word ptr [num_sectors_bios]  ; number of sectors actually written
 85 F6           # test si, si
 74 19           # jz write_error
 
@@ -351,7 +351,7 @@ C1 E6 09        # shl si, 9     ; 512 == 2^9
 01 F3           # add bx, si
 
 85 FF           # test di, di
-75 CA           # jnz write_one_loop
+75 CA                   # jnz write_one_loop
 
 89 DE           # mov si, bx
 
@@ -362,21 +362,21 @@ CB              # retf
 
 #:write_error
 # Print the error code, followed by the disk address packet
-8A 16 50 7E     # mov dl, [boot_drive]
+8A 16 50 7E             # mov dl, [boot_drive]
 88 E0           # mov al, ah
-9A 2A 7E 00 00  # call console_put_hex_16
+9A 2A 7E 00 00          # call console_put_hex_16
 B0 20           # mov al, 0x20
-9A 14 7E 00 00  # call console_putc_16
+9A 14 7E 00 00          # call console_putc_16
 BF 60 7E        # mov di, addr_packet      ; disk address packet
 #:write_debug
 8A 05           # mov al, [di]
-9A 2A 7E 00 00  # call console_put_hex_16
+9A 2A 7E 00 00          # call console_put_hex_16
 47              # inc di
-81 FF 70 7E     # cmp di, end_addr_packet
+81 FF 70 7E             # cmp di, end_addr_packet
 75 F2           # jnz write_debug
 
 # Reset the disk subsystem, then try again
-8A 16 50 7E     # mov dl, [boot_drive]
+8A 16 50 7E             # mov dl, [boot_drive]
 31 C0           # xor ax, ax
 CD 13           # int 0x13
 5F              # pop di
@@ -524,7 +524,7 @@ CD 15                   # int 15h
 #:init_no_a20
 # start 32bit mode
 FA                      # cli
-0F 01 06 8E 7F          # sgdt Saved_GDT_locator
+0F 01 06 8E 7F              # sgdt Saved_GDT_locator
 EB 06                   # jmp past_mbr
 90                      # nop    ; padding to align MBR
 90                      # nop    ; padding to align MBR
@@ -537,7 +537,7 @@ EB 06                   # jmp past_mbr
 0F 20 C0                # mov eax, cr0
 66 83 C8 01             # or eax, 0x01
 0F 22 C0                # mov cr0, eax
-EA 14 80 08 00          # jmp setup_32bit     ; sets CS
+EA 14 80        08 00   # jmp setup_32bit     ; sets CS
 
 #------
 #[8014]
@@ -562,21 +562,21 @@ E9 79 0B 00 00          # jmp internalshell
 
 # handle the timer interrupt 08
 BB 40 00 01 00        # mov ebx, &interrupt_table[08]
-66 C7 03 7D 80        # mov word [ebx + 0], low_address stub_interrupt_handler
+66 C7 03 7D 80                       # mov word [ebx + 0], low_address stub_interrupt_handler
 66 C7 43 06 00 00     # mov word [ebx + 6], high_address
 66 C7 43 02 08 00     # mov word [ebx + 2], code_segment = 0x0800
 C6 43 05 8E           # mov byte [ebx + 5], flags = 8E
 
 # handle int 80
 BB 00 04 01 00        # mov ebx, &interrupt_table[80]
-66 C7 03 CB 81        # mov word [ebx + 0], low_address syscall_interrupt_handler
+66 C7 03 CB 81                       # mov word [ebx + 0], low_address syscall_interrupt_handler
 66 C7 43 06 00 00     # mov word [ebx + 6], high_address
 66 C7 43 02 08 00     # mov word [ebx + 2], code_segment = 0x0800
 C6 43 05 8E           # mov byte [ebx + 5], flags = 8E
 
 # load the interrupt table
 FA                    # cli
-0F 01 1D 90 80 00 00  # lidt IDT_locator_32
+0F 01 1D 90 80 00 00      # lidt IDT_locator_32
 8B 1D 80 80 00 00     # mov ebx, [have_userspace]
 85 DB                 # test ebx
 74 01                 # jz before_userspace
@@ -637,7 +637,7 @@ A3 08 7B 00 00            # mov [0x7B08], eax  ; preserve so we can use these lo
 # The following far jump sets CS to a 16-bit protected mode selector
 # and the segment registers are also set to 16-bit protected mode selectors.
 # This is done prior to entering real mode.
-EA B0 80 00 00 18 00      # jmp 0x18:setup_16bit
+EA B0 80 00 00  18 00 # jmp 0x18:setup_16bit
 #------
 #[80B0]
 #:setup_16bit
@@ -666,7 +666,7 @@ B8 00 00                  # mov ax, 0x0
 BC 00 7B                  # mov sp, 0x7B00
 FA                        # cli
 0F 01 1E 10 81            # lidt IDT_locator_16
-0F 01 16 8E 7F            # lgdt Saved_GDT_locator
+0F 01 16 8E 7F              # lgdt Saved_GDT_locator
 FB                        # sti
 
 # Reset Gate A20 if needed
@@ -716,12 +716,12 @@ A3 08 7B              # mov [0x7B08], ax  ; preserve, they might be return value
 89 16 14 7B           # mov [0x7B14], dx
 5A                    # pop dx      ; carry the return IP in dx
 58                    # pop ax      ; CS
-0F 01 06 8E 7F        # sgdt Saved_GDT_locator
+0F 01 06 8E 7F              # sgdt Saved_GDT_locator
 0F 01 16 88 7F        # lgdt GDT_locator
 0F 20 C0              # mov eax, cr0
 66 83 C8 01           # or eax, 0x01         ; enable protected mode
 0F 22 C0              # mov cr0, eax
-EA 47 81 08 00        # jmp restore_32bit
+EA 47 81          08 00     # jmp restore_32bit
 #------
 #[8147]
 #:restore_32bit
@@ -732,7 +732,7 @@ B8 10 00 00 00        # mov eax, 0x0010      ; data descriptor
 8E E0                 # mov fs, eax
 8E E8                 # mov gs, eax
 8B 25 04 7B 00 00     # mov esp, [0x7B04]   ; restore, (saved in enter_16bit_mode)
-E8 D2 FE FF FF        # call setup_int_handlers
+E8 D2 FE FF FF              # call setup_int_handlers
 52                    # push edx            ; setup our return location
 # These restore the 16 bit portion of these registers, which may be a
 # return value from a 16 bit function, and they also restore any previous high
@@ -973,7 +973,7 @@ FC                          # cld
 89 F7                       # mov edi, esi
 AA                          # stosb
 # Lookup directory
-E8 48 01 00 00              # call find_file           ; eax=find_file(ebx)
+E8 48 01 00 00               # call find_file           ; eax=find_file(ebx)
 # Restore first char
 C6 47 FF 2F                 # mov byte [edi - 1], 0x2f
 83 F8 FF                    # cmp eax, -1
@@ -1008,7 +1008,7 @@ FF 05 63 82 00 00           # inc [next_filenum]
 EB 16                       # jmp syscall_open_finish
 
 #:open_read
-E8 F3 00 00 00              # call find_file
+E8 F3 00 00 00               # call find_file
 83 F8 FF                    # cmp eax, -1
 74 34                       # je open_finish_fail
 
@@ -1228,7 +1228,7 @@ A1 63 82 00 00        # mov eax, [next_filenum]
 89 C7                 # mov edi, eax
 C1 E7 0A              # shl edi, 0x0a
 81 C7 00 00 20 00     # add edi, 0x0200000
-E8 70 04 00 00        # call strcmp
+E8 70 04 00 00            # call strcmp
 74 08                 # je find_file_finish
 48                    # dec eax
 EB E6                 # jmp checkfile
@@ -1508,12 +1508,12 @@ C1 E0 0C              # shl eax, 0x0C
 89 77 0C              # mov [edi+0xC], esi       ; save stack pointer so we can return again later
 FF 47 10              # inc [edi+0x10]           ; fork = true
 
-A1 69 85 00 00        # mov eax, [next_save_process_address]    ; set save stack location
+A1 69 85 00 00                 # mov eax, [next_save_process_address]    ; set save stack location
 89 47 24              # mov [edi+0x24], eax
 
 B9 00 00 00 08        # mov ecx, 0x08000000
 29 F1                 # sub ecx, esi             ; compute save stack length
-01 0D 69 85 00 00     # add [next_save_process_address], ecx
+01 0D 69 85 00 00                 # add [next_save_process_address], ecx
 89 4F 28              # mov [edi+0x28], ecx
 89 C7                 # mov edi, eax
 F3 A4                 # rep movsb                ; save stack
@@ -1528,7 +1528,7 @@ C1 E0 0C              # shl eax, 0x0C
 29 F1                 # sub ecx, esi
 89 78 1C              # mov [eax+0x1C], edi     ; save address of saved process memory
 89 48 20              # mov [eax+0x20], ecx     ; save length of process memory
-01 0D 69 85 00 00     # add [next_save_process_address], ecx
+01 0D 69 85 00 00                 # add [next_save_process_address], ecx
 F3 A4                 # rep movsb                ; copy current process image to storage
 
 31 C0                 # xor eax, eax             ; return as child, we'll return again as parent when child exits
@@ -1555,7 +1555,7 @@ C3                    # ret
 #   edx: env
 #
 
-A1 D7 85 00 00  # mov eax, [next_process_num]
+A1 D7 85 00 00        # mov eax, [next_process_num]
 3C 01                 # cmp al, 1
 75 0A                 # jne not_first_process
 
@@ -1588,7 +1588,7 @@ A1 D7 85 00 00        # mov eax, [next_process_num]
 #:prepare_stack
 # eax=process number to use
 # --- env ---
-8B 3D 69 85 00 00     # mov edi, [next_save_process_address]
+8B 3D 69 85 00 00                 # mov edi, [next_save_process_address]
 6A 00                 # push 0                   ; push end of env
 #:push_env_loop
 # copy env arg to memory for this process
@@ -1644,7 +1644,7 @@ A1 D7 85 00 00        # mov eax, [next_process_num]
 C1 E0 0C              # shl eax, 0x0C
 05 00 00 02 00        # add eax, 0x0020000       ; pproc_descriptor = &proc_descriptor[current_process_num]
 
-89 3D 69 85 00 00     # mov [next_save_process_address], edi
+89 3D 69 85 00 00                 # mov [next_save_process_address], edi
 
 # copy cwd from current process
 05 00 01 00 00        # add eax, 0x100
@@ -1664,7 +1664,7 @@ AA                    # stosb
 50                    # push eax                 ; save new process id
 # get file address and length
 E8 C0 FC FF FF        # call absolute_path
-E8 58 FD FF FF        # call find_file           ; eax=find_file(ebx)
+E8 58 FD FF FF         # call find_file           ; eax=find_file(ebx)
 
 # zero process memory.
 # Do this after looking up file name because that may come from process memory.
@@ -1698,12 +1698,12 @@ F3 A4                 # rep movsb
 83 C0 20              # add eax, 0x20            ; go to next program header
 59                    # pop ecx                  ; restore program header count
 49                    # dec ecx
-75 EB                 # jnz program_header_loop
+75 EB                    # jnz program_header_loop
 
 58                    # pop eax                  ; restore new process num
 
 85 ED                 # test ebp, ebp            ; new process (vs overlay)?
-75 01                 # jnz record_process_address
+75 01                       # jnz record_process_address
 48                    # dec eax                  ; overlay
 
 #:record_process_address
@@ -1731,7 +1731,7 @@ F3 AA                 # rep stosb
 74 06                 # jz after_new_process
 
 # prepare for next process
-FF 05 D7 85 00 00     # inc [next_process_num]
+FF 05 D7 85 00 00           # inc [next_process_num]
 
 #:after_new_process
 # get entry point and jump
@@ -1753,7 +1753,7 @@ C3                    # ret
 57                    # push edi
 
 E8 25 FC FF FF        # call absolute_path
-E8 BD FC FF FF        # call find_file
+E8 BD FC FF FF         # call find_file
 83 F8 FF              # cmp eax, -1
 74 3F                 # je chdir_finish
 
@@ -1768,7 +1768,7 @@ EB 2B                 # jmp chdir_finish
 
 #:chdir_ok
 89 DE                 # mov esi, ebx
-8B 3D D7 85 00 00     # mov edi, [next_process_num]
+8B 3D D7 85 00 00           # mov edi, [next_process_num]
 4F                    # dec edi = current process
 C1 E7 0C              # shl edi, 0x0C
 81 C7 00 01 02 00     # add edi, 0x0020100       ; pproc_descriptor = &pproc_descriptor[current_process_num].current_dir
@@ -1804,9 +1804,9 @@ C3                    # ret
 #----------------------------------------
 #[876C]
 #:handle_syscall_exit
-A1 D7 85 00 00  # mov eax, [next_process_num]
+A1 D7 85 00 00        # mov eax, [next_process_num]
 48                    # dec eax = current process
-A3 D7 85 00 00  # mov [next_process_num], eax
+A3 D7 85 00 00        # mov [next_process_num], eax
 48                    # dec eax = parent process
 
 3C 00                 # cmp al, 0
@@ -1826,7 +1826,7 @@ C1 E0 0C              # shl eax, 0x0C
 F3 A4                 # rep movsb
 
 8B 70 24              # mov esi, [eax+0x24]                 ; deallocate memory for saved process
-89 35 69 85 00 00     # mov [next_save_process_address], esi
+89 35 69 85 00 00                 # mov [next_save_process_address], esi
 
 8B 60 0C              # mov esp, [eax+0xc]       ; restore stack pointer
 8B 70 14              # mov esi, [eax+0x14]      ; restore brk pointer
@@ -1874,7 +1874,7 @@ C3                       # ret
 #
 56                    # push esi
 
-8B 35 D7 85 00 00     # mov esi, [next_process_num]
+8B 35 D7 85 00 00           # mov esi, [next_process_num]
 4E                    # dec esi = current process
 C1 E6 0C              # shl esi, 0x0C
 81 C6 04 02 02 00     # add esi, 0x0020204       ; pproc_descriptor = &pproc_descriptor[current_process_num].files[0].offset
@@ -1921,7 +1921,7 @@ C3                    # ret
 #  ebx: path
 #  ecx: mode
 E8 20 FB FF FF           # call absolute_path
-E8 B8 FB FF FF           # call find_file
+E8 B8 FB FF FF            # call find_file
 83 F8 FF                 # cmp eax, -1
 74 02                    # je access_error_exit
 31 C0                    # xor eax, eax
@@ -2097,13 +2097,13 @@ C3                    # ret
 BE D2 88 00 00          # mov esi, string_src
 E8 A4 F8 FF FF          # call console_puts
 
-E8 A5 FF FF FF          # call read 'r'
-E8 A0 FF FF FF          # call read 'c'
-E8 9B FF FF FF          # call read ' '
+E8 A5 FF FF FF                # call read 'r'
+E8 A0 FF FF FF                # call read 'c'
+E8 9B FF FF FF                # call read ' '
 
 31 C9                   # xor ecx, ecx        ; count=0
 #:parse_count_loop
-E8 94 FF FF FF          # call read
+E8 94 FF FF FF                # call read
 3C 20                   # cmp al, ' '
 74 0C                   # je got_count
 
@@ -2131,7 +2131,7 @@ B9 00 08 00 00          # mov ecx, 0x00000800
 51                      # push ecx
 B9 00 00 D0 04          # mov ecx, 0x04D00000
 #:get_filename_loop
-E8 65 FF FF FF          # call read
+E8 65 FF FF FF                # call read
 
 3C 0A                   # cmp al, '\n'
 74 05                   # je got_filename
@@ -2160,9 +2160,9 @@ CD 80                   # int 80
 85 C9                   # test ecx, ecx
 74 11                   # jz src_finish
 31 DB                   # xor ebx, ebx            ; ebx=0=stdin
-E8 2C FF FF FF          # call read
+E8 2C FF FF FF                # call read
 89 D3                   # mov ebx, edx            ;  prepare to write
-E8 48 FF FF FF          # call write
+E8 48 FF FF FF               # call write
 49                      # dec ecx   ; count--
 EB EB                   # jmp read_write_loop
 
@@ -2196,7 +2196,7 @@ E8 03 F8 FF FF          # call console_puts
 # read "ex0 '
 B1 04                   # mov cl, 4
 #:ex0_loop
-E8 02 FF FF FF          # call read
+E8 02 FF FF FF                # call read
 FE C9                   # dec cl
 75 F7                   # jnz ex0_loop
 
@@ -2212,7 +2212,7 @@ B9 00 08 00 00          # mov ecx, 0x00000800
 
 BA 00 00 D0 04          # mov edx, 0x04D00000
 #:get_filename1_loop
-E8 E2 FE FF FF          # call read
+E8 E2 FE FF FF                # call read
 E8 BB F7 FF FF          # call console_putc
 3C 20                   # cmp al, ' '
 74 05                   # je got_filename1
@@ -2223,7 +2223,7 @@ EB ED                   # jmp get_file_name1_loop
 #:got_filename1
 BA 00 04 D0 04          # mov edx, 0x04D00400
 #:get_filename2_loop
-E8 CA FE FF FF          # call read
+E8 CA FE FF FF                # call read
 E8 A3 F7 FF FF          # call console_putc
 3C 0A                   # cmp al, '\n'
 74 05                   # je got_filename2
@@ -2259,7 +2259,7 @@ CD 80                   # int 80
 #:hex0_read_loop
 53                      # push ebx
 89 CB                   # mov ebx, ecx
-E8 87 FE FF FF          # call read
+E8 87 FE FF FF                # call read
 5B                      # pop ebx
 
 84 E4                   # test ah, ah
@@ -2312,7 +2312,7 @@ EB 0F                   # jmp maybe_store
 #:skip_comment
 53                      # push ebx
 89 CB                   # mov ebx, ecx
-E8 4A FE FF FF          # call read
+E8 4A FE FF FF                # call read
 5B                      # pop ebx
 3C 0A                   # cmp al, '\n'
 75 F3                   # jnz skip_comment
@@ -2337,7 +2337,7 @@ EB A7                   # jmp hex0_read_loop
 
 53                      # push ebx
 89 D3                   # mov ebx, edx
-E8 4D FE FF FF          # call write
+E8 4D FE FF FF               # call write
 5B                      # pop ebx
 
 31 DB                   # xor bx, bx
@@ -2364,7 +2364,7 @@ E9 93 FF FF FF          # jmp hex0_read_loop
 52                         # push edx
 56                         # push esi
 
-83 3D FD 8A 00 00 00       # cmp [enable_flush], 0
+83 3D FD 8A 00 00   00     # cmp [enable_flush], 0
 74 05                      # je clear_args
 E8 74 00 00 00             # call flush_disk
 
@@ -2388,7 +2388,7 @@ FB                         # sti
 
 BA 01 00 D0 04             # mov edx, 0x04D00001
 #:get_program_name
-E8 DD FD FF FF             # call read
+E8 DD FD FF FF                   # call read
 3C 20                      # cmp al, ' '
 74 05                      # je got_program_name
 88 02                      # mov [edx], al
@@ -2398,7 +2398,7 @@ EB F2                      # jmp get_program_name
 #:got_program_name
 BA 00 04 D0 04             # mov edx, 0x04D00400
 #:get_argument1_loop
-E8 CA FD FF FF             # call read
+E8 CA FD FF FF                   # call read
 3C 0A                      # cmp al, '\n'
 74 05                      # je got_argument1
 88 02                      # mov [edx], al
@@ -2435,12 +2435,12 @@ C3                         # ret
 50                       # push eax
 # copy memory file /dev/hda to the boot disk
 BB A3 8B 00 00           # mov ebx, str_dev_hda
-E8 D6 F8 FF FF           # call find_file
+E8 D6 F8 FF FF            # call find_file
 83 F8 FF                 # cmp eax, -1
 75 13                    # jne ok_flush
 
 #:error_exit
-BE 8D 8B 00 00  # mov esi, str_error_no_write
+BE 8D 8B 00 00           # mov esi, str_error_no_write
 E8 6F F6 FF FF           # call console_puts
 
 # one space to flush last line
@@ -2545,7 +2545,7 @@ F3 AA                          # rep stosb
 31 DB                          # xor ebx, ebx
 
 #:process_command
-E8 92 FC FF FF                 # call read
+E8 92 FC FF FF                       # call read
 3C 00                          # cmp al, 0
 74 2E                          # je build_finished
 
@@ -2554,7 +2554,7 @@ E8 92 FC FF FF                 # call read
 75 07                          # jne check_hex0_command
 
 #:handle_src_command
-E8 CB FC FF FF                 # call src
+E8 CB FC FF FF                        # call src
 EB EC                          # jmp process_command
 
 #:check_hex0_command
@@ -2562,7 +2562,7 @@ EB EC                          # jmp process_command
 75 07                          # jne check_flush_command
 
 #:handle_hex0_command
-E8 64 FD FF FF                 # call hex0
+E8 64 FD FF FF                       # call hex0
 EB E1                          # jmp process_command
 
 #:check_flush_command
@@ -2570,7 +2570,7 @@ EB E1                          # jmp process_command
 75 0D                          # jne call_handle_other_command
 
 #:handle_flush_command
-E8 6F FC FF FF                 # call read    ; read the newline
+E8 6F FC FF FF                       # call read    ; read the newline
 FF 05 FD 8A 00 00              # inc dword [enable_flush]
 EB D0                          # jmp process_command
 
@@ -2585,7 +2585,7 @@ E8 50 F5 FF FF                 # call console_puts
 E8 C2 FE FF FF                 # call flush_disk
 
 #:shell_reboot
-E9 7C F5 FF FF                 # jmp reboot
+E9 7C F5 FF FF                     # jmp reboot
 
 # sector padding
 00 00 00 00 00 00 00 00 00 00 00 00

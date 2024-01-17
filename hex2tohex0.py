@@ -8,6 +8,13 @@ def main():
     base_address = int(sys.argv[3], 16)
     labels = find_labels(hex2path, base_address)
     print_replace(hex2path, hex0path, labels, base_address)
+    for label in ['addr_packet', 'GDT_start', 'IDT_locator_32', 'IDT_locator_16']:
+        if label in labels and labels[label] % 16 != 0:
+            print("ERROR: label %s not aligned to 16 byte boundary (%x)!" % (label, labels[label]))
+            sys.exit(1)
+    if 'past_MBR' in labels and labels['past_MBR'] != 0x7e00 and labels['past_MBR'] != 0x8000:
+            print("ERROR: label past_MBR is not 0x7e00 or 0x8000")
+            sys.exit(1)
 
 
 def find_labels(hex2path, base_address):
@@ -68,15 +75,28 @@ def print_replace(hex2path, hex0path, labels, base_address):
         for line in h2f:
 
             for label, address in labels.items():
-                if len(label) + 1 - len(littleendian(address)) > 0:
-                    line = line.replace("&" + label + " ", littleendian(address) + " ")
+                if len(label) + 1 > len(littleendian(address)):
+                    # the label (with &) is long and we need to pad the replaced address with extra spaces
+                    extra_spaces = ' ' * (len(label) + 1 - len(littleendian(address)))
+                    line = line.replace("&" + label + " ", littleendian(address) + extra_spaces + " ")
                 else:
+                    # the label (with &) is short and we need to remove extra spaces to match the length of the address
+                    extra_spaces = ' ' * (len(littleendian(address)) - (len(label) + 1))
+                    line = line.replace("&" + label + extra_spaces + " ", littleendian(address) + " ")
+                    # if there were no extra spaces make sure the replacement can work anyway
                     line = line.replace("&" + label + " ", littleendian(address) + " ")
 
-                if len(label) + 1 - len(littleendian16(address)) > 0:
-                    line = line.replace("$" + label + " ", littleendian16(address) + " ")
+                if len(label) + 1 > len(littleendian16(address)):
+                    # the label (with $) is long and we need to pad the replaced address with extra spaces
+                    extra_spaces = ' ' * (len(label) + 1 - len(littleendian16(address)))
+                    line = line.replace("$" + label + " ", littleendian16(address) + extra_spaces + " ")
                 else:
+                    # the label (with $) is short and we need to remove extra spaces to match the length of the address
+                    extra_spaces = ' ' * (len(littleendian16(address)) - (len(label) + 1))
+                    line = line.replace("$" + label + extra_spaces + " ", littleendian16(address) + " ")
+                    # if there were no extra spaces make sure the replacement can work anyway
                     line = line.replace("$" + label + " ", littleendian16(address) + " ")
+
 
                 # XXX these functions could probably be unified!
                 line = relative8bit_replace(line, cur_address, label, address)
