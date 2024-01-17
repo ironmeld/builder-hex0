@@ -32,8 +32,11 @@
 #:_start
 
 # We cannot be sure the registers are initialized to zero so we
-# do that first. We far jump to mbr_main in order to set CS.
-31 C0             # xor ax, ax
+# do that first. We far jump in order to set CS.
+# Use special encoding of "xor ax, ax" to appease some BIOSes.
+33 C0             # xor ax, ax
+EA 07 7C 00 00    # jmp far setcs
+#:setcs
 8E D8             # mov ds, ax
 8E C0             # mov es, ax
 8E D0             # mov ss, ax
@@ -49,7 +52,7 @@ BF 00 7E          # mov di, $stage2_entry
 31 DB             # xor bx,bx
 
 #:read_loop
-E8 77 00          # call read
+E8 7D 00          # call read
 84 C0             # test al, al
 74 4B             # jz finish
 
@@ -92,7 +95,7 @@ EB 15             # jmp maybe_store
 EB 09             # jmp maybe_store
 
 #:skip_comment
-E8 44 00          # call read
+E8 4A 00          # call read
 3C 0A             # cmp al, '\n'
 75 F9             # jnz skip_comment
 EB C4             # jmp read_loop
@@ -119,11 +122,11 @@ AA                # stosb
 EB AE             # jmp read_loop
 
 #:finish
-E9 9A 01          # jmp stage2_entry
+E9 95 01          # jmp stage2_entry
 
 
 #------------------------------------------------------------
-#[7C66]
+#[7C6B]
 #:read_sector
 # input:
 # di = *dest_addr
@@ -142,9 +145,12 @@ E9 9A 01          # jmp stage2_entry
 B4 02                   # mov ah, 2        ; rw mode = 02 (read)
 B0 01                   # mov al, 1        ; num_sectors
 CD 13                   # int 0x13
-72 F8                   # jnc read_one_loop
-3C 01                   # cmp al, 1
-75 F4                   # jnz read_one_loop
+72 14                   # jnc read_error
+
+# Check for nonzero, not 1, because some BIOSes may read more
+# sectors for future use, and wrongly report it
+3C 00                   # cmp al, 0
+74 10                   # jz read_error
 
 80 F9 3F                # cmp cl, 0x3f        ; if sector_num == max_sector
 74 04                   # jz next_head        ;      goto next_head
@@ -160,16 +166,22 @@ B1 01                   # mov cl, 1           ; sector = 1
 58                      # pop ax
 C3                      # ret
 
+# Reset disk subsystem on error
+#:read_error
+31 C0                   # xor ax, ax
+CD 13                   # int 0x13
+EB DE                   # jmp read_one_loop
+
 
 #----------------------------------------
-#[7C86]
+#[7C91]
 #:last_read_location
 02 00                   ; last_cylinder/sector
 00                      ; last_head
 FF 01                   ; last_byte
 
 #----------------------------------------
-#[7C8B]
+#[7C96]
 #:read
 53                      # push bx
 51                      # push cx
@@ -178,7 +190,7 @@ FF 01                   ; last_byte
 57                      # push di
 
 # get current position
-BB 86 7C                # mov bx, last_read_location
+BB 91 7C  # mov bx, last_read_location
 8B 0F                   # mov cx, [bx]
 8A 77 02                # mov dh, [bx+2]
 8B 47 03                # mov ax, [bx+3]
@@ -193,7 +205,7 @@ EB 0D                   # jmp getchar
 
 #:read_next_sector
 BF 00 78                # mov di, 0x7800
-E8 BD FF                # call read_sector
+E8 B7 FF                # call read_sector
 # save new location and offset
 89 0F                   # mov [bx], cx
 88 77 02                # mov [bx+2], dh
@@ -215,6 +227,7 @@ C3                      # ret
 
 
 # padding to fill a 512 byte sector
+00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
@@ -229,12 +242,21 @@ C3                      # ret
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00
+
+# disk ID - some BIOSes don't tolerate zeros
+12 34 56 78
+
+# writeability flag - use 5E5E for read-only
+00 00
+
+# partition table - some BIOSes require this
+# Type B5 for "Boot5trap"
+80 00 02 00 B5 FF FF FF 01 00 00 00 FF FF FF FF
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
 # This is the DOS/MBR identifier at offset 510:
 55 AA
 #:stage2_entry

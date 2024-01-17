@@ -69,18 +69,14 @@ def print_replace(hex2path, hex0path, labels, base_address):
 
             for label, address in labels.items():
                 if len(label) + 1 - len(littleendian(address)) > 0:
-                    extra_spaces = ' ' * (len(label) + 1 - len(littleendian(address)))
-                    line = line.replace("&" + label + " ", littleendian(address) + extra_spaces + " ")
+                    line = line.replace("&" + label + " ", littleendian(address) + " ")
                 else:
-                    extra_spaces = ' ' * (len(littleendian(address)) - (len(label) + 1))
-                    line = line.replace("&" + label + extra_spaces + " ", littleendian(address) + " ")
+                    line = line.replace("&" + label + " ", littleendian(address) + " ")
 
                 if len(label) + 1 - len(littleendian16(address)) > 0:
-                    extra_spaces = ' ' * (len(label) + 1 - len(littleendian16(address)))
-                    line = line.replace("$" + label + " ", littleendian16(address) + extra_spaces + " ")
+                    line = line.replace("$" + label + " ", littleendian16(address) + " ")
                 else:
-                    extra_spaces = ' ' * (len(littleendian16(address)) - (len(label) + 1))
-                    line = line.replace("$" + label + extra_spaces + " ", littleendian16(address) + " ")
+                    line = line.replace("$" + label + " ", littleendian16(address) + " ")
 
                 # XXX these functions could probably be unified!
                 line = relative8bit_replace(line, cur_address, label, address)
