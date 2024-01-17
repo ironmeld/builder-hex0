@@ -28,27 +28,25 @@ if ! [ -f "${HEX2}" ]; then
     make -C hex2
 fi
 
-python3 hex2tohex0.py ${PROGRAM}.hex2 ${PROGRAM}-from-hex2.hex0 ${BASE_ADDR}
+python3 hex2tohex0.py ${PROGRAM}.hex2 ${PROGRAM}.hex0 ${BASE_ADDR}
 ${HEX2} --file ${PROGRAM}.hex2 --output ${PROGRAM}.hex2.bin --base-address ${BASE_ADDR} --little-endian
 
-cut ${PROGRAM}-from-hex2.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > ${PROGRAM}-from-hex2.bin
+cut ${PROGRAM}.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > ${PROGRAM}.bin
 
 od -tx1 ${PROGRAM}.hex2.bin > ${PROGRAM}.hex2.hex
-od -tx1 ${PROGRAM}-from-hex2.bin > ${PROGRAM}-from-hex2.hex
-diff -u ${PROGRAM}.hex2.hex ${PROGRAM}-from-hex2.hex
+od -tx1 ${PROGRAM}.bin > ${PROGRAM}.hex
+diff -u ${PROGRAM}.hex2.hex ${PROGRAM}.hex
 
-diff -u ${PROGRAM}.hex2.bin ${PROGRAM}-from-hex2.bin
+diff -u ${PROGRAM}.hex2.bin ${PROGRAM}.bin
 
 
-diff -u ${PROGRAM}.hex0 ${PROGRAM}-from-hex2.hex0 || true
-cut ${PROGRAM}-from-hex2.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > hex2.bin
+git diff ${PROGRAM}.hex0 || true
+cut ${PROGRAM}.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > hex2.bin
 echo "This file must be a multiple of 512:"
 ls -l hex2.bin
 rm -f -- *.hex *.bin
 
 if [ "${PROGRAM}" = "builder-hex0-x86-stage2" ]; then
     echo "To test in live-bootstrap (replacing path as necessary):"
-    echo "cp ${PROGRAM}-from-hex2.hex0 ~/live-bootstrap/kernel-bootstrap/${PROGRAM}.hex0"
+    echo "cp ${PROGRAM}.hex0 ~/live-bootstrap/kernel-bootstrap/${PROGRAM}.hex0"
 fi
-echo "When ready to commit:"
-echo "cp ${PROGRAM}-from-hex2.hex0 ${PROGRAM}.hex0"
