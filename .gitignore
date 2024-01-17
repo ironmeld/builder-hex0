@@ -1,3 +1,4 @@
 BUILD
 hex2/*.o
 hex2/hex2
+builder-hex0-x86-stage2.hex2
