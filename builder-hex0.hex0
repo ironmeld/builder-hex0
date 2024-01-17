@@ -280,7 +280,7 @@ C1 E7 09        # shl di, 9     ; 512 == 2^9
 5E              # pop si
 5B              # pop bx
 58              # pop ax
-CB              # retf
+C3              # retf
 
 #:read_error
 # Print the error code, followed by the disk address packet
@@ -302,7 +302,7 @@ BE 60 7C        # mov si, addr_packet      ; disk address packet
 31 C0           # xor ax, ax
 CD 13           # int 0x13
 5E              # pop si
-eb 96            
+EB 96                   # jmp read_one_loop
 
 
 #------------------------
@@ -333,17 +333,16 @@ eb 96
 66 89 0E 68 7C          # mov dword ptr [starting_lba], ecx
 8A 16 50 7C             # mov dl, [boot_drive]
 B4 43           # mov ah, 0x43       ; rw mode = 43 (write LBA)
-57              # push di
-BF 60 7C        # mov di, addr_packet      ; disk address packet
+BE 60 7C        # mov si, addr_packet      ; disk address packet
+
 CD 13           # int 0x13
-72 21           # jc write_error
+72 20           # jc write_error
 
 8B 36 62 7C             # mov si, word ptr [num_sectors_bios]  ; number of sectors actually written
 85 F6           # test si, si
-74 19           # jz write_error
+74 18           # jz write_error
 
 # we wrote some sectors, advance
-5F              # pop di
 29 F7           # sub di, si    ; num_sectors -= num_sectors_bios
 66 0F B7 C6     # movzx eax, si
 66 01 C1        # add ecx, eax
@@ -351,14 +350,14 @@ C1 E6 09        # shl si, 9     ; 512 == 2^9
 01 F3           # add bx, si
 
 85 FF           # test di, di
-75 CA                   # jnz write_one_loop
+75 CC                   # jnz write_one_loop
 
 89 DE           # mov si, bx
 
 5F              # pop di
 5B              # pop bx
 58              # pop ax
-CB              # retf
+C3              # retf
 
 #:write_error
 # Print the error code, followed by the disk address packet
@@ -379,12 +378,11 @@ BF 60 7C        # mov di, addr_packet      ; disk address packet
 8A 16 50 7C             # mov dl, [boot_drive]
 31 C0           # xor ax, ax
 CD 13           # int 0x13
-5F              # pop di
-eb 96             
+EB 99                   # jmp write_one_loop
 
 
 # align GDT to 16 byte boundary
-00 00
+00 00 00 00 00
 
 #---------------------------------------------
 # The Global Descriptor Table for 32 bit mode.
@@ -465,7 +463,7 @@ B8 00 7C                # mov ax, $kernel_entry
 75 0F                   # jne after_load
 
 BF 00 7E                # mov di, 0x7E00   ; place remaining code after MBR in memory
-B8 06 00                # mov ax, 6        ; num_sectors = 6
+B8 07 00                # mov ax, 7        ; num_sectors = 7
 66 B9 01 00 00 00       # mov ecx, 1       ; starting logical sector = 1
 E8 C1 FE                # call read_sectors_16
 
@@ -525,7 +523,7 @@ CD 15                   # int 15h
 # start 32bit mode
 FA                      # cli
 0F 01 06 8E 7D              # sgdt Saved_GDT_locator
-EB 06                   # jmp past_mbr
+EB 06                   # jmp past_MBR
 90                      # nop    ; padding to align MBR
 90                      # nop    ; padding to align MBR
 90                      # nop    ; padding to align MBR
@@ -2526,8 +2524,8 @@ C7 05 00 00 00 01 08 00 00 00  # mov word [0x01000000], 0x00000008
 EB 0A                          # jmp after_set_stdin
 
 #:stage2_stdin
-# Start reading stdin from logical sector 165
-C7 05 00 00 00 01 A5 00 00 00  # mov word [0x01000000], 0x000000A5
+# Start reading stdin from logical sector 167
+C7 05 00 00 00 01 A7 00 00 00  # mov word [0x01000000], 0x000000A7
 
 #:after_set_stdin
 # start at "end of sector" to trigger an initial sector read
