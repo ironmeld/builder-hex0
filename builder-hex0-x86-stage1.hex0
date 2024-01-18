@@ -35,7 +35,7 @@
 # do that first. We far jump in order to set CS.
 # Use special encoding of "xor ax, ax" to appease some BIOSes.
 33 C0             # xor ax, ax
-EA 07 7C  00 00   # jmp far setcs
+EA 07 7C 00 00    # jmp far setcs
 #:setcs
 8E D8             # mov ds, ax
 8E C0             # mov es, ax

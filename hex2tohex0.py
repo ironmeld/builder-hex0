@@ -89,6 +89,8 @@ def print_replace(hex2path, hex0path, labels, base_address):
                 if len(label) + 1 > len(littleendian16(address)):
                     # the label (with $) is long and we need to pad the replaced address with extra spaces
                     extra_spaces = ' ' * (len(label) + 1 - len(littleendian16(address)))
+                    line = line.replace("$" + label + " 00 00", littleendian16(address) + " 00 00" + extra_spaces)
+                    line = line.replace("$" + label + " 08 00", littleendian16(address) + " 08 00" + extra_spaces)
                     line = line.replace("$" + label + " ", littleendian16(address) + extra_spaces + " ")
                 else:
                     # the label (with $) is short and we need to remove extra spaces to match the length of the address
@@ -234,11 +236,21 @@ def relative32bit_replace(line, cur_address, label, address):
             while line[end_pos].isalnum() or line[end_pos] == '_':
                 end_pos += 1
             if label == line[pos:end_pos]:
-                extra_spaces = ' ' * (end_pos - pos - 10)
+                label_len = end_pos - pos + 1
                 if address - cur_address > 0:
-                    line = line.replace("%" + label, littleendian(address - cur_address) + extra_spaces)
+                    if label_len > 11:
+                        extra_spaces = ' ' * (label_len - 11)
+                        line = line.replace("%" + label, littleendian(address - cur_address) + extra_spaces)
+                    else:
+                        extra_spaces = ' ' * (11 - label_len)
+                        line = line.replace("%" + label + extra_spaces, littleendian(address - cur_address))
                 else:
-                    line = line.replace("%" + label, littleendian(0x100000000 + address - cur_address) + extra_spaces)
+                    if label_len > 11:
+                        extra_spaces = ' ' * (label_len - 11)
+                        line = line.replace("%" + label, littleendian(0x100000000 + address - cur_address) + extra_spaces)
+                    else:
+                        extra_spaces = ' ' * (11 - label_len)
+                        line = line.replace("%" + label + extra_spaces, littleendian(0x100000000 + address - cur_address))
             return line
 
         pos += 1
