@@ -29,24 +29,27 @@ This applies if the following changes:
 
 If the binary size of the builder-hex0 kernel changes, the `Makefile` rule for `BUILD/builder-hex0-mini-built.bin` will need to be changed. Change the line that runs build-mini.sh to pass the size of the resulting binary kernel. (The "mini" builder does not output the size of the artifact it builds so we have to tell the script the size of the artifact to extract from the disk image.)
 
+You must also change the sector to start reading src. This is in the internalshell function. This should be set to the size of the builder-hex0 binary in sectors (which is 8 at the time of this writing). Note there are two values in that function, one for the single stage kernel and one for stage 2. Change the first one.
 
-### Stage 1 Binary Size Adjustment
 
-The binary size of a stage 1 kernel is padded so that its size is a multiple of 512, which is the size of a disk sector. If you add enough code that causes the binary size of a stage 1 kernel to cross into the next sector you must pad it to the end of the sector and you have to make another change to the stage 1 kernel because the stage 1 kernel must read its own code (except the first sector) from the disk. You must change the number of sectors to read the kernel in the `kernel_main` function. The number of sectors is the size of the kernel binary divided by 512 and then subtract one. You subtract one because the BIOS already loads the first sector and so the rest of the kernel is read starting at sector 2.
+### Single Stage Binary Size Adjustment
 
-You must also change the location where the `internalshell` function starts reading input. You need to do this because the internalshell reads input starting right after the kernel on the disk, so the starting location varies depending on the size of the kernel. The starting location is set at the beginning of the `internalshell` function. The value should be the total number of sectors for the kernel plus one. Note that there are two values: a starting location for stage 1 kernel and a starting location for a stage 2 kernel. Change the first one.
+The binary size of the single stage kernel (builder-hex0) is padded so that its size is a multiple of 512, which is the size of a disk sector. If you add enough code that causes the binary size of the single stage kernel to cross into the next sector you must pad it to the end of the sector and you have to make another change to the single stage kernel because the single stage kernel must read its own code (except the first sector) from the disk. You must change the number of sectors to read the kernel in the `kernel_main` function. The number of sectors is the size of the kernel binary divided by 512 and then subtract one. You subtract one because the BIOS already loads the first sector and so the rest of the kernel is read starting at LBA sector 1 (which is the second sector because LBA is zero-based).
+
+You must also change the location where the `internalshell` function starts reading input. You need to do this because the internalshell reads input starting right after the kernel on the disk, so the starting location varies depending on the size of the kernel. The starting location is set at the beginning of the `internalshell` function. The value should be the total number of sectors for the kernel plus one. Note that there are two values: a starting location for the single stage kernel (builder-hex0) and a starting location for a stage 2 (builder-hex0-x86-stage2) kernel. Change the first one.
 
 ### Stage 2 Source Size Adjustment
 
-If the kernel is loaded by builder-hex0-x86-stage1 then it is loaded as hex0 source code which is converted to binary and runs as stage 2. The location that the `internalshell` function of the stage 2 kernel reads input from is on the first sector  *after* the stage 2 source code on the disk. Therefore, you need to determine how many sectors is needed to store builder-hex0-x86-stage2.hex0. You can typically divide the file size by 512 and add one. You don't need to add one if the size of the kernel source is an exact multiple of 512, which is possible but very unlikely. After determining the number of sectors, you must add 2 and total and set this value near the beginning of the internalshell function. Note there are two values, one for stage 1 and one for stage 2. Change the second one.
+If the kernel is loaded by builder-hex0-x86-stage1 then it is loaded as hex0 source code which is converted to binary and runs as stage 2. The location that the `internalshell` function of the stage 2 kernel reads input from is on the first sector *after* the stage 2 source code on the disk. Therefore, you need to determine how many sectors is needed to store builder-hex0-x86-stage2.hex0. You can typically divide the file size by 512, rounded down to the nearest integer, and add one. You don't need to add one if the size of the kernel source is an exact multiple of 512, which is possible but very unlikely. After determining the number of sectors, you must add 1 (or the size of the stage 1 kernel in sectors) and set the total value near the beginning of the internalshell function. Note there are two values, one for single stage and one for stage 2. Change the second one.
 
-Also, change the `build-stages.sh` script. Change the seek offset in the `dd` command after the `Place source ...` comment.
+Also, change the `build-stages.sh` script. Change the seek offset in the `dd` command after the `Place source ...` comment to the same number used in the internalshell function.
 
 ## Build and Test Checklist
 
 ```
-# Make edits to builder-hex0.hex2 and/or builder-hex0-x86-stage1.hex2
-# Convert to hex0:
+# Follow these steps after you have made changes to `builder-hex0.hex2` and/or `builder-hex0-x86-stage1.hex2`.
+
+# Convert hex2 files to hex0:
 $ ./hex2tohex0.sh builder-hex0 0x7C00
 $ ./hex2tohex0.sh builder-hex0-x86-stage1 0x7C00
 # The stage2 version of builder-hex0 just starts at a different address:
@@ -65,10 +68,10 @@ $ cp BUILD/builder-hex0-x86-stage1.img ~/live-bootstrap/seed/stage0-posix/bootst
 $ cp builder-hex0-x86-stage2.hex0 ~/live-bootstrap/kernel-bootstrap
 $ (cd ~/live-bootstrap;./rootfs.py --qemu)
 
-# After testing the hex2 and hex0 files can be committed with the following commands.
+# After testing, the hex2 and hex0 files can be committed with the following commands.
 $ git add builder-hex0.hex2 builder-hex0.hex0
 $ git add builder-hex0-x86-stage1.hex2 builder-hex0-x86-stage1.hex0
 # DO NOT git add builder-hex0-x86-stage2.hex2. This is just a temporary copy of builder-hex0.hex2
-# which is used to generate the hex0 file for stage2 (which just starts at a different address).
+# which is used to generate the hex0 file for stage2.
 $ git add builder-hex0-x86-stage2.hex0
 ```
