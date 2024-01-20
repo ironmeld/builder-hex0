@@ -1228,6 +1228,12 @@ C3                       # ret
 #   ebx: file
 #   edx: length
 #
+85 D2                   # test edx, edx
+75 !nonzero_read        # jnz nonzero_read
+31 C0                   # xor eax, eax
+C3                      # ret
+
+:nonzero_read
 53                      # push ebx
 51                      # push ecx
 52                      # push edx
@@ -2516,7 +2522,7 @@ E8 %flush_disk                 # call flush_disk
 E9 %reboot                     # jmp reboot
 
 # sector padding
-00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
