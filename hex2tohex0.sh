@@ -45,8 +45,3 @@ cut ${PROGRAM}.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > hex2.bin
 echo "This file must be a multiple of 512:"
 ls -l hex2.bin
 rm -f -- *.hex *.bin
-
-if [ "${PROGRAM}" = "builder-hex0-x86-stage2" ]; then
-    echo "To test in live-bootstrap (replacing path as necessary):"
-    echo "cp ${PROGRAM}.hex0 ~/live-bootstrap/kernel-bootstrap/${PROGRAM}.hex0"
-fi

@@ -46,10 +46,11 @@ FC                # cld ; clear direction flag
 #----------------------------------------
 # Compile hex0 to binary
 # compile(dl=boot_drive):
-BF $stage2_entry  # mov di, $stage2_entry
 
 # this flag is set after the first digit is seen
 31 DB             # xor bx,bx
+
+BF $stage2_entry  # mov di, $stage2_entry
 
 :read_loop
 E8 @read          # call read
@@ -124,45 +125,50 @@ EB !read_loop     # jmp read_loop
 :finish
 E9 @stage2_entry  # jmp stage2_entry
 
+#-------------
+# align to 16 bit boundary
+00 00 00 00 00
+:addr_packet
+10 00
+:num_sectors_bios
+01 00
+:dest_offset
+00 78
+:dest_segment
+00 00
+:starting_lba
+01 00 00 00 00 00 00 00
+:last_byte
+FF 01
 
 #------------------------------------------------------------
 :read_sector
 # input:
-# di = *dest_addr
-# cx=cylinder/sector
-# dh = head, dl=drive)
+# ecx = logical sector to read
+# dl = drive
 #
-# returns: di - next byte to write to
-#          cx,dh - next disk sector to read from
+# returns: ecx - next logical sector to read from
 #
-50                      # push ax
-53                      # push bx
+66 60                   # pushad
 
 89 FB                   # mov bx, di      ; int 13 writes to bx
 
 :read_one_loop
-B4 02                   # mov ah, 2        ; rw mode = 02 (read)
-B0 01                   # mov al, 1        ; num_sectors
+66 89 0E $starting_lba  # mov dword ptr [starting_lba], ecx
+BE 01 00                # mov si, 1
+89 36 $num_sectors_bios # mov word ptr [num_sectors_bios], si
+B4 42                   # mov ah, 0x42        ; rw mode = 42 (read LBA)
+BE $addr_packet         # mov si, addr_packet      ; disk address packet
 CD 13                   # int 0x13
 72 !read_error          # jc read_error
 
-# Check for nonzero, not 1, because some BIOSes may read more
-# sectors for future use, and wrongly report it
-3C 00                   # cmp al, 0
+8B 3E $num_sectors_bios # mov di, word ptr [num_sectors_bios]  ; number of sectors actually read
+85 FF                   # test di, di
 74 !read_error          # jz read_error
 
-80 F9 3F                # cmp cl, 0x3f        ; if sector_num == max_sector
-74 !next_head           # jz next_head        ;      goto next_head
-FE C1                   # inc cl              ; else sector_num++;
-EB !read_sector_finish  # jmp read_sector_finish
-
-:next_head
-FE C6                   # inc dh              ; else head_num++
-B1 01                   # mov cl, 1           ; sector = 1
-
-:read_sector_finish
-5B                      # pop bx
-58                      # pop ax
+89 DF                   # mov di, bx
+66 61                   # popad
+66 41                   # inc ecx
 C3                      # ret
 
 # Reset disk subsystem on error
@@ -170,13 +176,6 @@ C3                      # ret
 31 C0                   # xor ax, ax
 CD 13                   # int 0x13
 EB !read_one_loop       # jmp read_one_loop
-
-
-#----------------------------------------
-:last_read_location
-02 00                   ; last_cylinder/sector
-00                      ; last_head
-FF 01                   ; last_byte
 
 #----------------------------------------
 :read
@@ -187,10 +186,9 @@ FF 01                   ; last_byte
 57                      # push di
 
 # get current position
-BB $last_read_location  # mov bx, last_read_location
-8B 0F                   # mov cx, [bx]
-8A 77 02                # mov dh, [bx+2]
-8B 47 03                # mov ax, [bx+3]
+BB $starting_lba        # mov bx, starting_lba
+66 8B 0F                # mov ecx, [bx]
+8B 47 08                # mov ax, [bx+8]
 
 #end of sector?
 3D FF 01                # cmp ax, 0x01ff
@@ -201,15 +199,13 @@ BB $last_read_location  # mov bx, last_read_location
 EB !getchar             # jmp getchar
 
 :read_next_sector
-BF 00 78                # mov di, 0x7800
 E8 @read_sector         # call read_sector
 # save new location and offset
-89 0F                   # mov [bx], cx
-88 77 02                # mov [bx+2], dh
+66 89 0F                # mov [bx], ecx
 31 C0                   # xor ax, ax
 
 :getchar
-89 47 03                # mov [bx+3], ax
+89 47 08                # mov [bx+8], ax
 BE 00 78                # mov si, 0x7800
 89 C3                   # mov bx, ax
 8A 00                   # mov al, [si+bx]
@@ -224,8 +220,6 @@ C3                      # ret
 
 
 # padding to fill a 512 byte sector
-00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
