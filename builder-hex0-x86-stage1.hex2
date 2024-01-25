@@ -131,17 +131,11 @@ E9 @stage2_entry  # jmp stage2_entry
 #------------------------------------------------------------
 :read_sector
 # input:
-# ecx = logical sector to read
-# dl  = drive
+# dl = drive
 #
-# returns: ecx - next logical sector to read from
-#
-66 60                   # pushad
-
-89 FB                   # mov bx, di      ; int 13 writes to bx
+60                      # pusha
 
 :read_one_loop
-66 89 0E $starting_lba  # mov dword ptr [starting_lba], ecx
 BE 01 00                # mov si, 1
 89 36 $num_sectors_bios # mov word ptr [num_sectors_bios], si
 B4 42                   # mov ah, 0x42        ; rw mode = 42 (read LBA)
@@ -153,9 +147,7 @@ CD 13                   # int 0x13
 85 FF                   # test di, di
 74 !read_error          # jz read_error
 
-89 DF                   # mov di, bx
-66 61                   # popad
-66 41                   # inc ecx
+61                      # popa
 C3                      # ret
 
 # Reset disk subsystem on error
@@ -167,12 +159,11 @@ EB !read_one_loop       # jmp read_one_loop
 #----------------------------------------
 :read
 53                      # push bx
-51                      # push cx
 
 # get current position
 BB $starting_lba        # mov bx, starting_lba
-66 8B 0F                # mov ecx, [bx]
-8B 47 08                # mov ax, [bx+8]
+8B 0F                   # mov cx, [bx]
+8B 47 FA                # mov ax, [bx-6]
 
 #end of sector?
 3D FF 01                # cmp ax, 0x01ff
@@ -185,16 +176,16 @@ EB !getchar             # jmp getchar
 :read_next_sector
 E8 @read_sector         # call read_sector
 # save new location and offset
-66 89 0F                # mov [bx], ecx
+41                      # inc cx
+89 0F                   # mov [bx], cx
 31 C0                   # xor ax, ax
 
 :getchar
-89 47 08                # mov [bx+8], ax
+89 47 FA                # mov [bx-6], ax
 89 C3                   # mov bx, ax
 8A 87 00 78             # mov al, [bx+0x7800]
 
 #finish:
-59                      # pop cx
 5B                      # pop bx
 C3                      # ret
 
@@ -202,16 +193,17 @@ C3                      # ret
 # initialized data section
 :addr_packet
 10 00
+# This 16-bit field does double duty: outside read_sector, it holds
+# the last read offset, while read_sector reuses it to store the
+# number of sectors to read, saving 2 bytes of seed.
 :num_sectors_bios
-01 00
+FF 01
 :dest_offset
 00 78
 :dest_segment
 00 00
 :starting_lba
 01 00 00 00 00 00 00 00
-:last_byte
-FF 01
 
 # padding to fill a 512 byte sector
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
@@ -228,7 +220,8 @@ FF 01
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00
 
 # disk ID - some BIOSes don't tolerate zeros
 12 34 56 78

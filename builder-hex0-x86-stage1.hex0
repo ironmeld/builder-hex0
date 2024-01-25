@@ -57,7 +57,7 @@ EA 11 7C 00 00    # jmp far compile
 BF 00 7E          # mov di, $stage2_entry
 
 #:read_loop
-E8 80 00          # call read
+E8 73 00          # call read
 84 C0             # test al, al
 74 4B             # jz finish
 
@@ -100,7 +100,7 @@ EB 15             # jmp maybe_store
 EB 09             # jmp maybe_store
 
 #:skip_comment
-E8 4D 00          # call read
+E8 40 00          # call read
 3C 0A             # cmp al, '\n'
 75 F9             # jnz skip_comment
 EB C4             # jmp read_loop
@@ -133,49 +133,40 @@ E9 95 01          # jmp stage2_entry
 #[7C6B]
 #:read_sector
 # input:
-# ecx = logical sector to read
-# dl  = drive
+# dl = drive
 #
-# returns: ecx - next logical sector to read from
-#
-66 60                   # pushad
-
-89 FB                   # mov bx, di      ; int 13 writes to bx
+60                      # pusha
 
 #:read_one_loop
-66 89 0E C8 7C          # mov dword ptr [starting_lba], ecx
 BE 01 00                # mov si, 1
-89 36 C2 7C             # mov word ptr [num_sectors_bios], si
+89 36 B2 7C             # mov word ptr [num_sectors_bios], si
 B4 42                   # mov ah, 0x42        ; rw mode = 42 (read LBA)
-BE C0 7C                # mov si, addr_packet      ; disk address packet
+BE B0 7C                # mov si, addr_packet      ; disk address packet
 CD 13                   # int 0x13
-72 0F                   # jc read_error
+72 0A                   # jc read_error
 
-8B 3E C2 7C             # mov di, word ptr [num_sectors_bios]  ; number of sectors actually read
+8B 3E B2 7C             # mov di, word ptr [num_sectors_bios]  ; number of sectors actually read
 85 FF                   # test di, di
-74 07                   # jz read_error
+74 02                   # jz read_error
 
-89 DF                   # mov di, bx
-66 61                   # popad
-66 41                   # inc ecx
+61                      # popa
 C3                      # ret
 
 # Reset disk subsystem on error
 #:read_error
 31 C0                   # xor ax, ax
 CD 13                   # int 0x13
-EB D6                   # jmp read_one_loop
+EB E0                   # jmp read_one_loop
 
 #----------------------------------------
-#[7C99]
+#[7C8C]
 #:read
 53                      # push bx
-51                      # push cx
 
 # get current position
-BB C8 7C                # mov bx, starting_lba
-66 8B 0F                # mov ecx, [bx]
-8B 47 08                # mov ax, [bx+8]
+BB B8 7C                # mov bx, starting_lba
+8B 0F                   # mov cx, [bx]
+8B 47 FA                # mov ax, [bx-6]
 
 #end of sector?
 3D FF 01                # cmp ax, 0x01ff
@@ -186,18 +177,18 @@ BB C8 7C                # mov bx, starting_lba
 EB 08                   # jmp getchar
 
 #:read_next_sector
-E8 BC FF                # call read_sector
+E8 CB FF                # call read_sector
 # save new location and offset
-66 89 0F                # mov [bx], ecx
+41                      # inc cx
+89 0F                   # mov [bx], cx
 31 C0                   # xor ax, ax
 
 #:getchar
-89 47 08                # mov [bx+8], ax
+89 47 FA                # mov [bx-6], ax
 89 C3                   # mov bx, ax
 8A 87 00 78             # mov al, [bx+0x7800]
 
 #finish:
-59                      # pop cx
 5B                      # pop bx
 C3                      # ret
 
@@ -205,16 +196,17 @@ C3                      # ret
 # initialized data section
 #:addr_packet
 10 00
+# This 16-bit field does double duty: outside read_sector, it holds
+# the last read offset, while read_sector reuses it to store the
+# number of sectors to read, saving 2 bytes of seed.
 #:num_sectors_bios
-01 00
+FF 01
 #:dest_offset
 00 78
 #:dest_segment
 00 00
 #:starting_lba
 01 00 00 00 00 00 00 00
-#:last_byte
-FF 01
 
 # padding to fill a 512 byte sector
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
@@ -231,7 +223,8 @@ FF 01
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00
 
 # disk ID - some BIOSes don't tolerate zeros
 12 34 56 78
