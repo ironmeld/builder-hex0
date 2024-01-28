@@ -35,17 +35,21 @@
 # do that first. We far jump in order to set CS.
 # Use special encoding of "xor ax, ax" to appease some BIOSes.
 33 C0             # xor ax, ax
-EA 07 7C 00 00    # jmp far setcs
-#:setcs
 8E D8             # mov ds, ax
 8E C0             # mov es, ax
 8E D0             # mov ss, ax
 BC 00 77          # mov sp, 0x7700
 FC                # cld ; clear direction flag
+EA 11 7C 00 00    # jmp far compile
 
 #----------------------------------------
+#[7C11]
+#:compile
 # Compile hex0 to binary
-# compile(dl=boot_drive):
+#
+# input:
+# ecx = logical sector to read
+# dl  = boot drive
 
 # this flag is set after the first digit is seen
 31 DB             # xor bx,bx
@@ -53,14 +57,14 @@ FC                # cld ; clear direction flag
 BF 00 7E          # mov di, $stage2_entry
 
 #:read_loop
-E8 97 00          # call read
+E8 73 00          # call read
 84 C0             # test al, al
 74 4B             # jz finish
 
 3C 23             # cmp al, '#'
 74 28             # jz skip_comment
 
-3C 3B             # cmp ';'
+3C 3B             # cmp al, ';'
 74 24             # jz skip_comment
 
 3C 66             # cmp al, 'f'
@@ -96,7 +100,7 @@ EB 15             # jmp maybe_store
 EB 09             # jmp maybe_store
 
 #:skip_comment
-E8 64 00          # call read
+E8 40 00          # call read
 3C 0A             # cmp al, '\n'
 75 F9             # jnz skip_comment
 EB C4             # jmp read_loop
@@ -125,72 +129,44 @@ EB AE             # jmp read_loop
 #:finish
 E9 95 01          # jmp stage2_entry
 
-#-------------
-# align to 16 bit boundary
-00 00 00 00 00
-#:addr_packet
-10 00
-#:num_sectors_bios
-01 00
-#:dest_offset
-00 78
-#:dest_segment
-00 00
-#:starting_lba
-01 00 00 00 00 00 00 00
-#:last_byte
-FF 01
-
 #------------------------------------------------------------
-#[7C82]
+#[7C6B]
 #:read_sector
 # input:
-# ecx = logical sector to read
 # dl = drive
 #
-# returns: ecx - next logical sector to read from
-#
-66 60                   # pushad
-
-89 FB                   # mov bx, di      ; int 13 writes to bx
+60                      # pusha
 
 #:read_one_loop
-66 89 0E 78 7C          # mov dword ptr [starting_lba], ecx
 BE 01 00                # mov si, 1
-89 36 72 7C             # mov word ptr [num_sectors_bios], si
+89 36 B2 7C             # mov word ptr [num_sectors_bios], si
 B4 42                   # mov ah, 0x42        ; rw mode = 42 (read LBA)
-BE 70 7C                # mov si, addr_packet      ; disk address packet
+BE B0 7C                # mov si, addr_packet      ; disk address packet
 CD 13                   # int 0x13
-72 0F                   # jc read_error
+72 0A                   # jc read_error
 
-8B 3E 72 7C             # mov di, word ptr [num_sectors_bios]  ; number of sectors actually read
+8B 3E B2 7C             # mov di, word ptr [num_sectors_bios]  ; number of sectors actually read
 85 FF                   # test di, di
-74 07                   # jz read_error
+74 02                   # jz read_error
 
-89 DF                   # mov di, bx
-66 61                   # popad
-66 41                   # inc ecx
+61                      # popa
 C3                      # ret
 
 # Reset disk subsystem on error
 #:read_error
 31 C0                   # xor ax, ax
 CD 13                   # int 0x13
-EB D6                   # jmp read_one_loop
+EB E0                   # jmp read_one_loop
 
 #----------------------------------------
-#[7CB0]
+#[7C8C]
 #:read
 53                      # push bx
-51                      # push cx
-52                      # push dx
-56                      # push si
-57                      # push di
 
 # get current position
-BB 78 7C                # mov bx, starting_lba
-66 8B 0F                # mov ecx, [bx]
-8B 47 08                # mov ax, [bx+8]
+BB B8 7C                # mov bx, starting_lba
+8B 0F                   # mov cx, [bx]
+8B 47 FA                # mov ax, [bx-6]
 
 #end of sector?
 3D FF 01                # cmp ax, 0x01ff
@@ -201,25 +177,36 @@ BB 78 7C                # mov bx, starting_lba
 EB 08                   # jmp getchar
 
 #:read_next_sector
-E8 B9 FF                # call read_sector
+E8 CB FF                # call read_sector
 # save new location and offset
-66 89 0F                # mov [bx], ecx
+41                      # inc cx
+89 0F                   # mov [bx], cx
 31 C0                   # xor ax, ax
 
 #:getchar
-89 47 08                # mov [bx+8], ax
-BE 00 78                # mov si, 0x7800
+89 47 FA                # mov [bx-6], ax
 89 C3                   # mov bx, ax
-8A 00                   # mov al, [si+bx]
+8A 87 00 78             # mov al, [bx+0x7800]
 
 #finish:
-5F                      # pop di
-5E                      # pop si
-5A                      # pop dx
-59                      # pop cx
 5B                      # pop bx
 C3                      # ret
 
+#-------------
+# initialized data section
+#:addr_packet
+10 00
+# This 16-bit field does double duty: outside read_sector, it holds
+# the last read offset, while read_sector reuses it to store the
+# number of sectors to read, saving 2 bytes of seed.
+#:num_sectors_bios
+FF 01
+#:dest_offset
+00 78
+#:dest_segment
+00 00
+#:starting_lba
+01 00 00 00 00 00 00 00
 
 # padding to fill a 512 byte sector
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
@@ -235,7 +222,9 @@ C3                      # ret
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00
 
 # disk ID - some BIOSes don't tolerate zeros
 12 34 56 78
