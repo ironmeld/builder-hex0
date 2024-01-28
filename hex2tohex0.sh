@@ -31,7 +31,7 @@ fi
 python3 hex2tohex0.py ${PROGRAM}.hex2 ${PROGRAM}.hex0 ${BASE_ADDR}
 ${HEX2} --file ${PROGRAM}.hex2 --output ${PROGRAM}.hex2.bin --base-address ${BASE_ADDR} --little-endian
 
-cut ${PROGRAM}.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > ${PROGRAM}.bin
+cut -f1 -d'#' ${PROGRAM}.hex0 | cut -f1 -d';' | xxd -r -p > ${PROGRAM}.bin
 
 od -tx1 ${PROGRAM}.hex2.bin > ${PROGRAM}.hex2.hex
 od -tx1 ${PROGRAM}.bin > ${PROGRAM}.hex
@@ -41,7 +41,7 @@ diff -u ${PROGRAM}.hex2.bin ${PROGRAM}.bin
 
 
 git diff ${PROGRAM}.hex0 || true
-cut ${PROGRAM}.hex0 -f1 -d'#' | cut -f1 -d';' | xxd -r -p > hex2.bin
+cut -f1 -d'#' ${PROGRAM}.hex0 | cut -f1 -d';' | xxd -r -p > hex2.bin
 echo "This file must be a multiple of 512:"
 ls -l hex2.bin
 rm -f -- *.hex *.bin
