@@ -1534,7 +1534,6 @@ C1 E0 0C              # shl eax, 0x0C
 75 !forked            # jnz forked
 
 #not_forked
-8B 60 0C              # mov esp, [eax+0xC]       ; no fork so reset initial stack to same as current process
 A1 &next_process_num  # mov eax, [next_process_num]
 48                    # dec eax
 EB !prepare_stack     # jmp prepare_stack
@@ -2522,7 +2521,7 @@ E8 %flush_disk                 # call flush_disk
 E9 %reboot                     # jmp reboot
 
 # sector padding
-00 00 00 00 00
+00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
