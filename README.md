@@ -81,9 +81,8 @@ See build.sh for further guidance on the above instructions.
 * 4GB of memory
 * PC compatible-BIOS
    * Must support int 10h,AH=0Eh (Write character to console)
-   * Must support int 13h,AH=02h (Read Sectors)
-   * Must support int 13h,AH=03h (Write Sectors)
-   * Must support int 13h,AH=08h (Read Drive Parameters)
+   * Must support int 13h,AH=42h (Read Sectors Extended/LBA)
+   * Must support int 13h,AH=43h (Write Sectors Extended/LBA)
    * Must support int 15h,0x2401 (A20 activation)
 * Disk large enough to hold kernel and build script with source files
 
