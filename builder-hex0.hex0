@@ -2544,11 +2544,16 @@ B9 00 0E 00 00                 # mov ecx, 0x00000E00
 31 C0                          # xor eax, eax
 F3 AA                          # rep stosb
 
+# clear file name table
+BF 00 00 20 00                 # mov edi, 0x00200000
+B9 00 00 E0 00                 # mov ecx, 0x00E00000
+F3 AA                          # rep stosb
+
 # read from stdin
 31 DB                          # xor ebx, ebx
 
 #:process_command
-E8 92 FC FF FF                 # call read
+E8 86 FC FF FF                 # call read
 3C 00                          # cmp al, 0
 74 2E                          # je build_finished
 
@@ -2557,7 +2562,7 @@ E8 92 FC FF FF                 # call read
 75 07                          # jne check_hex0_command
 
 #:handle_src_command
-E8 CB FC FF FF                 # call src
+E8 BF FC FF FF                 # call src
 EB EC                          # jmp process_command
 
 #:check_hex0_command
@@ -2565,7 +2570,7 @@ EB EC                          # jmp process_command
 75 07                          # jne check_flush_command
 
 #:handle_hex0_command
-E8 64 FD FF FF                 # call hex0
+E8 58 FD FF FF                 # call hex0
 EB E1                          # jmp process_command
 
 #:check_flush_command
@@ -2573,26 +2578,25 @@ EB E1                          # jmp process_command
 75 0D                          # jne call_handle_other_command
 
 #:handle_flush_command
-E8 6F FC FF FF                 # call read    ; read the newline
+E8 63 FC FF FF                 # call read    ; read the newline
 FF 05 01 89 00 00              # inc dword [enable_flush]
 EB D0                          # jmp process_command
 
 #:call_handle_other_command
-E8 4C FE FF FF                 # call handle_other_command
+E8 40 FE FF FF                 # call handle_other_command
 EB C9                          # jmp process_command
 
 #:build_finished
 BE 81 89 00 00                 # mov esi, str_build_finished
-E8 4C F5 FF FF                 # call console_puts
+E8 40 F5 FF FF                 # call console_puts
 
-E8 C2 FE FF FF                 # call flush_disk
+E8 B6 FE FF FF                 # call flush_disk
 
 #:shell_reboot
-E9 78 F5 FF FF                 # jmp reboot
+E9 6C F5 FF FF                 # jmp reboot
 
 # sector padding
-00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
