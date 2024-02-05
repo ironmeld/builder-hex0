@@ -5,7 +5,7 @@ Note that there is a checklist at the bottom of this file that summarizes all th
 ## hex2 to hex0
 
 For some programs, development is done in hex2 and then converted to hex0 with comments preserved.
-You can use the hex2tohex.py utility. This can also be run with hex2tohex0.sh which will do the conversion and verify that resulting hex0 was created properly by cross-checking it with the hex2 executable from stage0-posix.
+You can use the hex2tohex0.py utility. This can also be run with hex2tohex0.sh which will do the conversion and verify that resulting hex0 was created properly by cross-checking it with the hex2 executable from stage0-posix.
 
 ## Kernel variations
 
@@ -61,11 +61,10 @@ $ make test
 
 # builder-hex0 is used by the live-bootstrap project so it is a good idea to run the
 # following commands to test your changes with that project. Note the paths and commands
-# used by live-bootstrap and stage0-posix are subject to change.
+# used by live-bootstrap are subject to change.
 $ (cd ~/ && git clone https://github.com/fosslinux/live-bootstrap && cd live-bootstrap && git submodule update --init --recursive)
-$ cp builder-hex0-x86-stage1.hex0 ~/live-bootstrap/seed/stage0-posix/bootstrap-seeds/NATIVE/x86/
-$ cp BUILD/builder-hex0-x86-stage1.img ~/live-bootstrap/seed/stage0-posix/bootstrap-seeds/NATIVE/x86/
-$ cp builder-hex0-x86-stage2.hex0 ~/live-bootstrap/kernel-bootstrap
+$ cp builder-hex0-x86-stage1.hex0 ~/live-bootstrap/builder-hex0
+$ cp builder-hex0-x86-stage2.hex0 ~/live-bootstrap/builder-hex0
 $ (cd ~/live-bootstrap;./rootfs.py --qemu)
 
 # After testing, the hex2 and hex0 files can be committed with the following commands.
