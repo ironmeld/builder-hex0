@@ -96,7 +96,7 @@
 #                      0x100  0x100  current directory
 #                      0x200  x0E00  file descriptors 448 * 8 bytes each
 #                                    { global_file_index, current_offset }
-#    10800 -    1FFFF unused
+#    10800 -    1FFFF BIOS memory map
 #    10000 -    107FF interrupt table
 #     A000 -     A1FF sector read buffer - 16bit
 #     7C00 -     8600 code
@@ -509,17 +509,69 @@ B8 01 24                # mov ax,2401h     # enable A20 line
 CD 15                   # int 15h
 
 :init_no_a20
-# start 32bit mode
-FA                      # cli
-0F 01 06 $Saved_GDT_locator # sgdt Saved_GDT_locator
-EB !past_MBR            # jmp past_MBR
-90                      # nop    ; padding to align MBR
-90                      # nop    ; padding to align MBR
-90                      # nop    ; padding to align MBR
-90                      # nop    ; padding to align MBR
+
+# adapted from https://wiki.osdev.org/Detecting_Memory_(x86)#Getting_an_E820_Memory_Map
+# use the INT 0x15, eax=0xE820 BIOS function to get a memory map
+
+66 60                       # pushad
+66 9C                       # pushfd
+06                          # push es
+68 00 10                    # push 0x1000
+07                          # pop es
+EB !past_MBR                # jmp past_MBR
+90                          # nop    ; padding to align MBR
 # This is the DOS/MBR identifier at offset 510:
 55 AA
 :past_MBR
+66 31 DB                    # xor ebx, ebx              ; ebx must be 0 to start
+26 66 89 1E 00 08           # mov dword ptr es:[0x800], ebx ; mark structure as invalid initially
+BF 08 08                    # mov di, 0x808             ; write entries from 0x10808 for a final multiboot structure at 0x10804
+66 31 ED                    # xor ebp, ebp              ; keep an entry count in bp
+66 BA 50 41 4D 53           # mov edx, 0x0534D4150      ; place "SMAP" into edx
+66 B8 20 E8 00 00           # mov eax, 0xE820
+26 66 C7 45 14 01 00 00 00  # mov dword ptr es:[di + 20], 1 ; force a valid ACPI 3.X entry
+66 B9 18 00 00 00           # mov ecx, 24               ; ask for 24 bytes
+CD 15                       # int 0x15
+72 !failed                  # jc short failed           ; carry set on first call means "unsupported function"
+66 BA 50 41 4D 53           # mov edx, 0x0534D4150      ; Some BIOSes apparently trash this register?
+66 39 D0                    # cmp eax, edx              ; on success, eax must have been reset to "SMAP"
+75 !failed                  # jne short failed
+66 85 DB                    # test ebx, ebx             ; ebx = 0 implies list is only 1 entry long (worthless)
+74 !failed                  # je short failed
+EB !jmpin                   # jmp short jmpin
+:e820lp
+66 B8 20 E8 00 00           # mov eax, 0xE820           ; eax, ecx get trashed on every int 0x15 call
+26 66 C7 45 14 01 00 00 00  # mov [es:di + 20], dword 1 ; force a valid ACPI 3.X entry
+66 B9 18 00 00 00           # mov ecx, 24               ; ask for 24 bytes again
+CD 15                       # int 0x15
+72 !e820f                   # jc short e820f            ; carry set means "end of list already reached"
+66 BA 50 41 4D 53           # mov edx, 0x0534D4150      ; repair potentially trashed register
+:jmpin
+E3 !skipent                 # jcxz skipent              ; skip any 0 length entries
+80 F9 14                    # cmp cl, 20                ; got a 24 byte ACPI 3.X response?
+76 !notext                  # jbe short notext
+26 F6 45 14 01              # test byte ptr es:[di + 20], 1 ; if so: is the "ignore this data" bit clear?
+74 !skipent                 # je short skipent
+:notext
+26 66 8B 4D 08              # mov ecx, es:[di + 8]      ; get lower uint32_t of memory region length
+26 66 0B 4D 0C              # or ecx, es:[di + 12]      ; "or" it with upper uint32_t to test for zero
+74 !skipent                 # jz skipent                ; if length uint64_t is 0, skip entry
+83 C5 18                    # add bp, 24                ; got a good entry: ++count, move to next storage spot
+26 66 C7 45 FC 14 00 00 00  # mov dword ptr es:[di - 4], 20 ; set multiboot entry size
+83 C7 18                    # add di, 24
+:skipent
+66 85 DB                    # test ebx, ebx             ; if ebx resets to 0, list is complete
+75 !e820lp                  # jne short e820lp
+:e820f
+26 66 89 2E 00 08           # mov es:[0x800], ebp       ; store the structure size
+:failed
+07                          # pop es
+66 9D                       # popfd
+66 61                       # popad
+
+# start 32bit mode
+FA                      # cli
+0F 01 06 $Saved_GDT_locator # sgdt Saved_GDT_locator
 0F 01 16 $GDT_locator   # lgdt GDT_locator
 0F 20 C0                # mov eax, cr0
 66 83 C8 01             # or eax, 0x01
@@ -576,20 +628,17 @@ C3                        # ret
 CF                    # iret
 
 #----------------------------------------
-:Init_A20
-00 00
-
-#----------------------------------------
 :have_userspace
 00 00 00 00
-
-# align IDT locator to 16 byte boundary
-00 00 00 00 00 00 00 00 00 00 00 00
 
 #----------------------------------------
 :IDT_locator_32
 FF 07        #  length
 00 00 01 00  #  IDT_start
+
+#----------------------------------------
+:Init_A20
+00 00
 
 
 #------------------------------------------------------------
@@ -666,7 +715,7 @@ A1 08 7B                  # mov ax, [0x7B08]  ; restore from above
 CB                        # retf
 
 # align IDT locator to 16-byte boundary
-00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00
 
 #------
 :IDT_locator_16
@@ -1184,7 +1233,7 @@ A1 &next_filenum      # mov eax, [next_filenum]
 89 DE                 # mov esi, ebx
 
 :checkfile
-83 F8 03              # cmp eax, 3
+83 F8 02              # cmp eax, 2
 74 !not_found         # je not_found
 89 C7                 # mov edi, eax
 C1 E7 0A              # shl edi, 0x0a
@@ -2447,10 +2496,34 @@ C3                       # ret
 #/  d  e  v  /  h  d  a \0
 2F 64 65 76 2F 68 64 61 00
 
+#------
+:str_e820
+#/  e  8  2  0 \0
+2F 65 38 32 30 00
+
 
 #------------------------------------------------------------
 :internalshell
-B8 &kernel_entry               # mov eax, $kernel_entry
+
+# clear file name table
+BF 00 00 20 00                 # mov edi, 0x00200000
+B9 00 00 E0 00                 # mov ecx, 0x00E00000
+31 C0                          # xor eax, eax
+F3 AA                          # rep stosb
+
+# check for an E820 memory map
+A1 00 08 01 00                 # mov eax, [0x10800]
+85 C0                          # test eax, eax
+74 !no_e820                    # jz no_e820
+A3 38 00 00 01                 # mov [0x1000038], eax
+C7 05 34 00 00 01 04 08 01 00  # mov dword [0x1000034], 0x10804
+BE &str_e820                   # mov esi, str_e820
+BF 00 0C 20 00                 # mov edi, 0x200C00
+B9 06 00 00 00                 # mov ecx, 6
+F3 A4                          # rep movsb
+
+:no_e820
+B8 &kernel_entry               # mov eax, &kernel_entry
 3D 00 7C 00 00                 # cmp eax, 0x00007C00
 75 !stage2_stdin               # jne stage2_stdin
 
@@ -2459,8 +2532,8 @@ C7 05 00 00 00 01 08 00 00 00  # mov word [0x01000000], 0x00000008
 EB !after_set_stdin            # jmp after_set_stdin
 
 :stage2_stdin
-# Start reading stdin from logical sector 168
-C7 05 00 00 00 01 A8 00 00 00  # mov word [0x01000000], 0x000000A8
+# Start reading stdin from logical sector 175
+C7 05 00 00 00 01 AF 00 00 00  # mov word [0x01000000], 0x000000AF
 
 :after_set_stdin
 # start at "end of sector" to trigger an initial sector read
@@ -2472,11 +2545,6 @@ C7 05 00 00 00 01 A8 00 00 00  # mov word [0x01000000], 0x000000A8
 BF 00 02 02 00                 # mov edi, 0x00020200
 B9 00 0E 00 00                 # mov ecx, 0x00000E00
 31 C0                          # xor eax, eax
-F3 AA                          # rep stosb
-
-# clear file name table
-BF 00 00 20 00                 # mov edi, 0x00200000
-B9 00 00 E0 00                 # mov ecx, 0x00E00000
 F3 AA                          # rep stosb
 
 # read from stdin
@@ -2526,22 +2594,7 @@ E8 %flush_disk                 # call flush_disk
 E9 %reboot                     # jmp reboot
 
 # sector padding
-00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
