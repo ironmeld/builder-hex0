@@ -21,8 +21,17 @@ dd if=$STAGE1 of="$IMG" conv=notrunc
 # Place stage2 starting at sector LBA sector 1
 dd if="$STAGE2" of="$IMG" seek=1 bs=512 conv=notrunc
 
-# Place source starting at LBA sector 168
-dd if="$SRC" of="$IMG" seek=168 bs=512 conv=notrunc
+# Place source after size of stage2 in sectors plus one for stage1 plus one because LBA is zero based
+STAGE2_LEN=$(wc -c $STAGE2 | awk '{print $1}')
+if [ $((STAGE2_LEN % 512)) = 0 ]; then
+    STAGE2_SECTORS=$((STAGE2_LEN / 512))
+else
+    STAGE2_SECTORS=$((STAGE2_LEN / 512 + 1))
+fi
+SRC_LBA_SECTOR=$((STAGE2_SECTORS + 1))
+
+# Place source starting at LBA sector after stage1 and stage2
+dd if="$SRC" of="$IMG" seek=$SRC_LBA_SECTOR bs=512 conv=notrunc
 
 # Launch build
 qemu-system-x86_64 $ENABLE_KVM -m 4G -nographic -machine kernel-irqchip=split -drive file="$IMG",format=raw --no-reboot | tee "$LOG"

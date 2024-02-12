@@ -42,7 +42,6 @@ You must also change the location where the `internalshell` function starts read
 
 If the kernel is loaded by builder-hex0-x86-stage1 then it is loaded as hex0 source code which is converted to binary and runs as stage 2. The location that the `internalshell` function of the stage 2 kernel reads input from is on the first sector *after* the stage 2 source code on the disk. Therefore, you need to determine how many sectors is needed to store builder-hex0-x86-stage2.hex0. You can typically divide the file size by 512, rounded down to the nearest integer, and add one. You don't need to add one if the size of the kernel source is an exact multiple of 512, which is possible but very unlikely. After determining the number of sectors, you must add 1 (or the size of the stage 1 kernel in sectors) and set the total value near the beginning of the internalshell function. Note there are two values, one for single stage and one for stage 2. Change the second one.
 
-Also, change the `build-stages.sh` script. Change the seek offset in the `dd` command after the `Place source ...` comment to the same number used in the internalshell function.
 
 ## Build and Test Checklist
 
