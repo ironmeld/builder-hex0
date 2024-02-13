@@ -64,7 +64,7 @@
 
 #------------------------------------------------------------
 # Memory:
-# 54000000 - BFFFFFFF files (~1812MB)
+# 54000000 - BBFFFFFF files (~1744MB)
 # 30000000 - 53FFFFFF saved processes (~604MB)
 # 08048000 - 2FFFFFFF current running process (~670MB)
 # 01080000 - 08000000 32 bit stack (117MB)
@@ -75,10 +75,11 @@
 #   201800 -   FFFFFF file names 6..14335
 #   201400 -   2017FF file name 5
 #   201000 -   2013FF file name 4
-#   100000 -   200FF0 unused
-#    9FC00 -    FFFFF BIOS
-#    40200 -    9FBFF scratch buffer
-#    40000 -    401FF stdin device buffer
+#   200C00 -   200FFF file name 3 ("/e820")
+#   100000 -   200BF0 unused
+#    80000 -    FFFFF BIOS
+#    50000 -    7FFFF scratch buffer
+#    40000 -    4FFFF stdin device buffer
 #    20000 -    3FFFF process descriptors ( 16 * 4096 bytes each)
 #                      offset len    description
 #                      0x000  0x004  process address
@@ -98,8 +99,8 @@
 #                                    { global_file_index, current_offset }
 #    10800 -    1FFFF BIOS memory map
 #    10000 -    107FF interrupt table
-#     A000 -     A1FF sector read buffer - 16bit
-#     7C00 -     8600 code
+#     8E00 -     FFFF unused
+#     7C00 -     8DFF code
 #     7B00 -     7BFF Saved 32 bit registers while in 16 bit mode
 #   < 7B00            real mode stack
 #------------------------------------------------------------
@@ -213,11 +214,11 @@ C3                   # ret
 :addr_packet
 10 00
 :num_sectors_bios
-01 00
+40 00
 :dest_offset
 00 00
 :dest_segment
-00 00
+00 40
 :starting_lba
 00 00 00 00 00 00 00 00
 :end_addr_packet
@@ -225,27 +226,24 @@ C3                   # ret
 #------------------------
 :read_sectors_16
 # inputs:
-#   di: dest_addr
+#   edi: dest_addr (with segment)
 #   ecx: first logical sector
 #   ax: num_sectors
 #
 # outputs:
-#   di: next byte to write to
+#   edi: next byte to write to
 #   ecx: next disk sector to read from
 #
 50                       # push ax
-53                       # push bx
+66 53                    # push ebx
 56                       # push si
 
-1E                       # push ds
-5B                       # pop bx
-89 1E $dest_segment      # mov word ptr [dest_segment], bx
 89 C6                    # mov si, ax      ; si=num_sectors
-89 FB                    # mov bx, di      ; int 13 writes to bx
+66 89 FB                 # mov ebx, edi      ; int 13 writes to bx
 
 :read_one_loop
 89 36 $num_sectors_bios  # mov word ptr [num_sectors_bios], si
-89 1E $dest_offset       # mov word ptr [dest_offset], bx
+66 89 1E $dest_offset    # mov dword ptr [dest_offset], ebx
 66 89 0E $starting_lba   # mov dword ptr [starting_lba], ecx
 8A 16 $boot_drive        # mov dl, [boot_drive]
 B4 42                    # mov ah, 0x42        ; rw mode = 42 (read LBA)
@@ -265,16 +263,16 @@ CD 13                    # int 0x13
 29 FE                    # sub si, di    ; num_sectors -= num_sectors_bios
 66 0F B7 C7              # movzx eax, di
 66 01 C1                 # add ecx, eax
-C1 E7 09                 # shl di, 9     ; 512 == 2^9
-01 FB                    # add bx, di
+66 C1 E0 09              # shl eax, 9    ; 512 == 2^9
+66 01 C3                 # add ebx, eax
 
 85 F6                    # test si, si
 75 !read_one_loop        # jnz read_one_loop
 
-89 DF                    # mov di, bx
+66 89 DF                 # mov edi, ebx
 
 5E                       # pop si
-5B                       # pop bx
+66 5B                    # pop ebx
 58                       # pop ax
 C3                       # retf
 
@@ -306,27 +304,24 @@ EB !read_one_loop        # jmp read_one_loop
 #------------------------
 :write_sectors_16
 # inputs:
-#   si: source_addr
+#   esi: source_addr (with segment)
 #   ecx: first logical sector
 #   ax: num_sectors
 #
 # outputs:
-#   si: next byte to read from
+#   esi: next byte to read from
 #   ecx: next disk sector to write to
 #
 50                      # push ax
-53                      # push bx
+66 53                   # push ebx
 57                      # push di
 
-1E                      # push ds
-5B                      # pop bx
-89 1E $dest_segment     # mov word ptr [dest_segment], bx
 89 C7                   # mov di, ax      ; di=num_sectors
-89 F3                   # mov bx, si      ; int 13 reads from [bx]
+66 89 F3                # mov ebx, esi      ; int 13 reads from [bx]
 
 :write_one_loop
 89 3E $num_sectors_bios # mov word ptr [num_sectors_bios], di
-89 1E $dest_offset      # mov word ptr [dest_offset], bx
+66 89 1E $dest_offset   # mov dword ptr [dest_offset], ebx
 66 89 0E $starting_lba  # mov dword ptr [starting_lba], ecx
 8A 16 $boot_drive       # mov dl, [boot_drive]
 B4 43                   # mov ah, 0x43       ; rw mode = 43 (write LBA)
@@ -345,16 +340,16 @@ CD 13                   # int 0x13
 29 F7                   # sub di, si    ; num_sectors -= num_sectors_bios
 66 0F B7 C6             # movzx eax, si
 66 01 C1                # add ecx, eax
-C1 E6 09                # shl si, 9     ; 512 == 2^9
-01 F3                   # add bx, si
+66 C1 E0 09             # shl eax, 9    ; 512 == 2^9
+66 01 C3                # add ebx, eax
 
 85 FF                   # test di, di
 75 !write_one_loop      # jnz write_one_loop
 
-89 DE                   # mov si, bx
+66 89 DE                # mov esi, ebx
 
 5F                      # pop di
-5B                      # pop bx
+66 5B                   # pop ebx
 58                      # pop ax
 C3                      # retf
 
@@ -383,7 +378,7 @@ EB !write_one_loop      # jmp write_one_loop
 
 
 # align GDT to 16 byte boundary
-00 00 00 00 00
+00 00 00
 
 #---------------------------------------------
 # The Global Descriptor Table for 32 bit mode.
@@ -1100,7 +1095,7 @@ C3                          # ret
 56                            # push esi
 57                            # push edi
 
-BF 00 02 04 00                # mov edi, 0x00040200      ; scratch buffer
+BF 00 00 05 00                # mov edi, 0x00050000      ; scratch buffer
 57                            # push edi
 
 # if absolute path, skip prefixing current directory
@@ -1309,7 +1304,7 @@ BB 00 00 00 01          # mov ebx, 0x01000000
 66 8B 43 04             # mov ax, [ebx+4]
 
 #end of sector?
-66 3D FF 01             # cmp ax, 0x01ff
+66 3D FF 7F             # cmp ax, 0x7fff
 74 !read_next_sector    # je read_next_sector
 
 :nextchar
@@ -1317,18 +1312,12 @@ BB 00 00 00 01          # mov ebx, 0x01000000
 EB !getchar             # jmp getchar
 
 :read_next_sector
-BF 00 A0 00 00          # mov edi, 0x000A000
-B8 01 00 00 00          # mov eax, 0x0001   ; num_sectors = 1
+BF 00 00 00 40          # mov edi, 0x4000:0000 ; addr 0x40000
+B8 40 00 00 00          # mov eax, 0x0040   ; num_sectors = 64
 E8 %read_sectors        # call read_sectors
 # save new location and offset
 89 0B                   # mov [ebx], ecx
 31 C0                   # xor eax, eax
-
-# move block to device buffer
-BE 00 A0 00 00           # mov esi, 0x000A000
-BF 00 00 04 00           # mov edi, 0x0040000
-B9 00 02 00 00           # mov ecx, 0x0000200
-F3 A4                    # rep movsb
 
 :getchar
 66 A3 04 00 00 01        # mov [0x01000004], ax
@@ -2467,14 +2456,14 @@ E8 %console_putc         # call console_putc
 :sector_loop
 # copy 512 bytes from file to 16 bit buffer
 51                       # push ecx                 ; save disk location
-BF 00 A0 00 00           # mov edi, 0x000A000
+BF 00 00 04 00           # mov edi, 0x0040000
 B9 00 02 00 00           # mov ecx, 0x200
 F3 A4                    # rep movsb
 59                       # pop ecx
 
 # now write from 16 bit buffer
 56                       # push esi                 ; save our location in the file
-BE 00 A0 00 00           # mov esi, 0x000A000
+BE 00 00 00 40           # mov esi, 0x4000:0000     ; addr 0x40000
 B8 01 00 00 00           # mov eax, 0x0001          ; num_sectors = 1
 E8 %write_sectors        # call write_sectors
 5E                       # pop esi
@@ -2545,7 +2534,7 @@ C7 05 00 00 00 01 AF 00 00 00  # mov word [0x01000000], 0x000000AF
 
 :after_set_stdin
 # start at "end of sector" to trigger an initial sector read
-66 C7 05 04 00 00 01 FF 01     # mov word [0x01000004], 0x01FF
+66 C7 05 04 00 00 01 FF 7F     # mov word [0x01000004], 0x7FFF
 66 C7 05 00 01 02 00 2F 00     # mov [0x00020100], 0x002F     ; proc[0].cwd = "/"
 66 C7 05 00 11 02 00 2F 00     # mov [0x00021100], 0x002F     ; proc[1].cwd = "/"
 
@@ -2602,7 +2591,8 @@ E8 %flush_disk                 # call flush_disk
 E9 %reboot                     # jmp reboot
 
 # sector padding
-00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
