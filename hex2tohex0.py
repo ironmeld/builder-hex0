@@ -13,7 +13,7 @@ def main():
             print("ERROR: label %s not aligned to 16 byte boundary (%x)!" % (label, labels[label]))
             sys.exit(1)
     if 'past_MBR' in labels and labels['past_MBR'] != 0x7e00 and labels['past_MBR'] != 0x8000:
-            print("ERROR: label past_MBR is not 0x7e00 or 0x8000")
+            print("ERROR: label past_MBR is not 0x7e00 or 0x8000 (%x)" % labels['past_MBR'])
             sys.exit(1)
 
 
