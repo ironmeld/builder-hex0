@@ -251,7 +251,9 @@ C3                   # ret
 B4 42                    # mov ah, 0x42        ; rw mode = 42 (read LBA)
 56                       # push si
 BE $addr_packet          # mov si, addr_packet      ; disk address packet
+66 60                    # pushad
 CD 13                    # int 0x13
+66 61                    # popad
 72 !read_error           # jc read_error
 
 8B 3E $num_sectors_bios  # mov di, word ptr [num_sectors_bios]  ; number of sectors actually read
@@ -294,7 +296,9 @@ BE $addr_packet          # mov si, addr_packet      ; disk address packet
 # Reset the disk subsystem, then try again
 8A 16 $boot_drive        # mov dl, [boot_drive]
 31 C0                    # xor ax, ax
+66 60                    # pushad
 CD 13                    # int 0x13
+66 61                    # popad
 5E                       # pop si
 EB !read_one_loop        # jmp read_one_loop
 
@@ -328,7 +332,9 @@ EB !read_one_loop        # jmp read_one_loop
 B4 43                   # mov ah, 0x43       ; rw mode = 43 (write LBA)
 BE $addr_packet         # mov si, addr_packet      ; disk address packet
 
+66 60                   # pushad
 CD 13                   # int 0x13
+66 61                   # popad
 72 !write_error         # jc write_error
 
 8B 36 $num_sectors_bios # mov si, word ptr [num_sectors_bios]  ; number of sectors actually written
@@ -370,7 +376,9 @@ BF $addr_packet         # mov di, addr_packet      ; disk address packet
 # Reset the disk subsystem, then try again
 8A 16 $boot_drive       # mov dl, [boot_drive]
 31 C0                   # xor ax, ax
+66 60                   # pushad
 CD 13                   # int 0x13
+66 61                   # popad
 EB !write_one_loop      # jmp write_one_loop
 
 
@@ -502,6 +510,11 @@ FB                      # sti
 
 A3 $Init_A20            # mov word ptr [Init_A20], ax
 85 C0                   # test ax, ax
+EB !past_MBR            # jmp past_MBR
+90                      # nop    ; padding to align MBR
+# This is the DOS/MBR identifier at offset 510:
+55 AA
+:past_MBR
 75 !init_no_a20         # jnz init_no_a20
 
 # enable Gate A20
@@ -518,11 +531,6 @@ CD 15                   # int 15h
 06                          # push es
 68 00 10                    # push 0x1000
 07                          # pop es
-EB !past_MBR                # jmp past_MBR
-90                          # nop    ; padding to align MBR
-# This is the DOS/MBR identifier at offset 510:
-55 AA
-:past_MBR
 66 31 DB                    # xor ebx, ebx              ; ebx must be 0 to start
 26 66 89 1E 00 08           # mov dword ptr es:[0x800], ebx ; mark structure as invalid initially
 BF 08 08                    # mov di, 0x808             ; write entries from 0x10808 for a final multiboot structure at 0x10804
@@ -2595,7 +2603,6 @@ E9 %reboot                     # jmp reboot
 
 # sector padding
 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
