@@ -148,11 +148,15 @@ B4 0E           # mov ah, 0x0E
 
 # convert LF to CR LF for BIOS output
 B0 0D           # mov al, 0x0D
+66 60           # pushad
 CD 10           # int 0x10
+66 61           # popad
 B0 0A           # mov al, 0x0A
 
 :regular
+66 60           # pushad
 CD 10           # int 0x10
+66 61           # popad
 
 58              # pop ax
 5B              # pop bx
@@ -208,7 +212,7 @@ C3                   # ret
 80
 
 # align address packet to 16 byte boundary
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00
 
 #-------------
 :addr_packet
@@ -704,7 +708,9 @@ A1 $Init_A20              # mov ax, word ptr [Init_A20]
 85 C0                     # test ax, ax
 75 !enter_no_a20          # jnz enter_no_a20
 B8 00 24                  # mov ax,2400h     # disable A20 line
+66 60                     # pushad
 CD 15                     # int 15h
+66 61                     # popad
 
 :enter_no_a20
 # Using retf to set CS comes from here:
@@ -718,7 +724,7 @@ A1 08 7B                  # mov ax, [0x7B08]  ; restore from above
 CB                        # retf
 
 # align IDT locator to 16-byte boundary
-00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00
 
 #------
 :IDT_locator_16

@@ -146,15 +146,19 @@ BB 00 07        # mov bx, 0x0007
 B4 0E           # mov ah, 0x0E
 
 3C 0A           # cmp al, 0x0A
-75 06           # jne regular
+75 0A           # jne regular
 
 # convert LF to CR LF for BIOS output
 B0 0D           # mov al, 0x0D
+66 60           # pushad
 CD 10           # int 0x10
+66 61           # popad
 B0 0A           # mov al, 0x0A
 
 #:regular
+66 60           # pushad
 CD 10           # int 0x10
+66 61           # popad
 
 58              # pop ax
 5B              # pop bx
@@ -162,7 +166,7 @@ C3              # ret
 
 
 #------------------------
-#[7C2A]
+#[7C32]
 #:console_put_hex_16
 # input:
 #   al: byte to print as hex
@@ -182,7 +186,7 @@ EB 02                # jmp print1
 04 37                # add al, 0x37
 
 #:print1
-E8 D7 FF             # call console_putc_16
+E8 CF FF             # call console_putc_16
 
 58                   # pop ax        ; restore original al
 50                   # push ax       ;
@@ -199,7 +203,7 @@ EB 02                # jmp print2
 04 37                # add al, 0x37
 
 #:print2
-E8 C6 FF             # call console_putc_16
+E8 BE FF             # call console_putc_16
 
 58                   # pop ax
 C3                   # ret
@@ -207,12 +211,12 @@ C3                   # ret
 
 
 #-------------
-#[7C50]
+#[7C58]
 #:boot_drive
 80
 
 # align address packet to 16 byte boundary
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00
 
 #-------------
 #[7C60]
@@ -251,7 +255,7 @@ C3                   # ret
 89 36 62 7C              # mov word ptr [num_sectors_bios], si
 66 89 1E 64 7C           # mov dword ptr [dest_offset], ebx
 66 89 0E 68 7C           # mov dword ptr [starting_lba], ecx
-8A 16 50 7C              # mov dl, [boot_drive]
+8A 16 58 7C              # mov dl, [boot_drive]
 B4 42                    # mov ah, 0x42        ; rw mode = 42 (read LBA)
 56                       # push si
 BE 60 7C                 # mov si, addr_packet      ; disk address packet
@@ -284,21 +288,21 @@ C3                       # retf
 
 #:read_error
 # Print the error code, followed by the disk address packet
-8A 16 50 7C              # mov dl, [boot_drive]
+8A 16 58 7C              # mov dl, [boot_drive]
 88 E0                    # mov al, ah
-9A 2A 7C 00 00           # call console_put_hex_16
+9A 32 7C 00 00           # call console_put_hex_16
 B0 20                    # mov al, 0x20
 9A 14 7C 00 00           # call console_putc_16
 BE 60 7C                 # mov si, addr_packet      ; disk address packet
 #:read_debug
 8A 04                    # mov al, [si]
-9A 2A 7C 00 00           # call console_put_hex_16
+9A 32 7C 00 00           # call console_put_hex_16
 46                       # inc si
 81 FE 70 7C              # cmp si, end_addr_packet
 75 F2                    # jnz read_debug
 
 # Reset the disk subsystem, then try again
-8A 16 50 7C              # mov dl, [boot_drive]
+8A 16 58 7C              # mov dl, [boot_drive]
 31 C0                    # xor ax, ax
 66 60                    # pushad
 CD 13                    # int 0x13
@@ -330,7 +334,7 @@ EB 89                    # jmp read_one_loop
 89 3E 62 7C             # mov word ptr [num_sectors_bios], di
 66 89 1E 64 7C          # mov dword ptr [dest_offset], ebx
 66 89 0E 68 7C          # mov dword ptr [starting_lba], ecx
-8A 16 50 7C             # mov dl, [boot_drive]
+8A 16 58 7C             # mov dl, [boot_drive]
 B4 43                   # mov ah, 0x43       ; rw mode = 43 (write LBA)
 BE 60 7C                # mov si, addr_packet      ; disk address packet
 
@@ -362,21 +366,21 @@ C3                      # retf
 
 #:write_error
 # Print the error code, followed by the disk address packet
-8A 16 50 7C             # mov dl, [boot_drive]
+8A 16 58 7C             # mov dl, [boot_drive]
 88 E0                   # mov al, ah
-9A 2A 7C 00 00          # call console_put_hex_16
+9A 32 7C 00 00          # call console_put_hex_16
 B0 20                   # mov al, 0x20
 9A 14 7C 00 00          # call console_putc_16
 BF 60 7C                # mov di, addr_packet      ; disk address packet
 #:write_debug
 8A 05                   # mov al, [di]
-9A 2A 7C 00 00          # call console_put_hex_16
+9A 32 7C 00 00          # call console_put_hex_16
 47                      # inc di
 81 FF 70 7C             # cmp di, end_addr_packet
 75 F2                   # jnz write_debug
 
 # Reset the disk subsystem, then try again
-8A 16 50 7C             # mov dl, [boot_drive]
+8A 16 58 7C             # mov dl, [boot_drive]
 31 C0                   # xor ax, ax
 66 60                   # pushad
 CD 13                   # int 0x13
@@ -458,7 +462,7 @@ FF FF # limit 0:15
 #   dl: boot_drive
 #
 # Load the kernel and jump to it
-88 16 50 7C             # mov [boot_drive], dl
+88 16 58 7C             # mov [boot_drive], dl
 
 # if this is not stage1 skip load; kernel is already loaded
 B8 00 7C                # mov ax, $kernel_entry
@@ -722,9 +726,11 @@ FB                        # sti
 # Reset Gate A20 if needed
 A1 36 7F                  # mov ax, word ptr [Init_A20]
 85 C0                     # test ax, ax
-75 05                     # jnz enter_no_a20
+75 09                     # jnz enter_no_a20
 B8 00 24                  # mov ax,2400h     # disable A20 line
+66 60                     # pushad
 CD 15                     # int 15h
+66 61                     # popad
 
 #:enter_no_a20
 # Using retf to set CS comes from here:
@@ -738,7 +744,7 @@ A1 08 7B                  # mov ax, [0x7B08]  ; restore from above
 CB                        # retf
 
 # align IDT locator to 16-byte boundary
-00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00
 
 #------
 #[7FB0]
@@ -807,7 +813,7 @@ C3                      # ret
 #[801C]
 #:console_put_hex
 E8 17 FF FF FF          # call enter_16bit_real
-E8 06 FC                # call console_put_hex_16(al)
+E8 0E FC                # call console_put_hex_16(al)
 9A B6 7F 00 00          # call resume_32bit_mode
 C3                      # ret
 
