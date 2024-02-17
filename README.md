@@ -1,37 +1,41 @@
-# Builder-Hex0 v1.0-prerelease
-Builder-Hex0 is a builder with a hex0 compiler. It runs in the form of a bootable disk image.
+# Builder-hex0 v1.0-prerelease
+Builder-hex0 is a minimal build system which includes a bootloader, kernel, shell, and a hex0 compiler.
+It runs in the form of a bootable disk image.
 
 It has these features:
-* Minimal 32-bit mode POSIX kernel
-* The kernel is less than 3.5K in size
-* Built-in Minimal Shell
-* Built-in `src` command to load source files
-* Built-in `hex0` Compiler converts hex source to binary files
-* Written in about 2400 lines of commented hex
-* Can be built using a 16-bit "mini" builder that is only 384 bytes
-* Can be built and launched using a 16-bit stage1 boot loader that is only 192 bytes of code
+* The binary is less than 4K in size, written in about 2600 lines of commented hexadecimal for x86 opcodes
+* Includes a minimal 32-bit x86 POSIX kernel
+  * Implements 15 Linux-compatible system calls
+  * Includes a built-in memory file system
+* Includes a minimal internal shell with built-in commands `src`, `hex0`, and `f`
+  * `src` command can be used to load source files into the memory file system
+  * `hex0` compiler converts hex source to binary files
+  * `f` command can be used to write the file `/dev/hda` directly to the disk
+* Can execute 32-bit x86 ELF programs
+* Can be built and launched in memory using a 16-bit stage1 boot loader that is only 192 bytes of code
+* Can be built and written to disk using a 16-bit "mini" builder that is only 384 bytes
 
 ## Status
 
 * Initial development goals have been reached.
   * It can build itself.
   * It can build x86 [stage0-posix](https://github.com/oriansj/stage0-posix) up to a working M2-Mesoplanet compiler.
-  * It can build [live-bootstrap](https://github.com/fosslinux/live-bootstrap) up to tcc-0.9.27.
+  * It can build [live-bootstrap](https://github.com/fosslinux/live-bootstrap) up to tcc-0.9.27, which is used to build the [Fiwix](https://github.com/mikaku/Fiwix) kernel.
 
 * For experienced developers
-  * Natively written in hex0 and hex2
+  * Natively written in hex0 (without labels) and hex2 (with labels)
   * Includes nasm-like assembly comments for reference only
   * Minimal to no error checking
 
 
 ## Why?
 
-This kernel is for bootstrapping compilers without having to aquire and trust a prebuilt binary. You still have to trust that the hex codes provided represent the x86 opcodes in the comments. But verifying the opcodes have been encoded properly is a straightforward process that you are encouraged to do using your own methods. You can also convert the hex to binary by any method you prefer. A Makefile is provided to do all this for you, for convenience, but you are free to distrust that in favor of your own methods.
+This kernel and minimal build system is for bootstrapping compilers without having to aquire and trust a prebuilt binary. Of course, you still have to convert builder-hex0 to a 4K binary and that requires trusting that the hex codes provided represent the x86 opcodes in the comments. But verifying that the opcodes have been encoded properly is a straightforward process that you are encouraged to do using your own methods. You can also convert the hex to binary by any method you prefer. You also need to write the binary to disk using the method of your choice. A Makefile is provided to do all this for you, for convenience, but you are free to distrust that in favor of your own methods. 
 
 
 ## Building with make
 
-The build requires qemu-system-x86\_64 with kvm enabled.
+Building with the Makefile requires qemu-system-x86\_64 and KVM enabled on your system.
 
 Run:
 
@@ -134,14 +138,23 @@ hex0 $input_hex0_file $output_binary_file
 
 Reads hex0 from the input file, converts to binary, and writes to the output file.
 
+Example:
+```
+hex0 /myshell.hex0 /myshell
+```
+
 ### The f (flush) command
 
-The `f` command writes the memory file named `/dev/hda` to the disk. The `f` command should immediately be followed by a newline character. Note the flush command does not execute immediately. The next command is read from the hard drive, then the flush is performed, and finally the command is executed. This supports performing a "kexec" command to launch another kernel. If the flush was performed immediately, it might overwrite the kexec command on the disk and so it is delayed until after the next command is read from the drive.
+Builder-hex0 is designed to write a file named `/dev/hda` to the disk. This is called a "flush". Builder-hex0 also writes the length of the file to the screen when it performs a flush. This can be used to produce "output" from builder-hex0. For example, you can build an executable and call it `/dev/hda` and this file will be written back to the disk. Or you could produce an bootable disk image. Anything you put in the file named `/dev/hda` is written directly to the disk starting at the first sector.
+
+IMPORTANT: A flush occurs automatically when the internal shell reaches a zero byte in the input script, which signifies the end of the script. If you wish to avoid a write to the disk you should execute a program that does not return to the internal shell.
+
+The `f` command tells builder-hex0 to perform a flush *before running the next command*. The `f` command should immediately be followed by a newline character. The next command is then read from the hard drive, the flush is performed, and finally the command is executed. This supports performing a "kexec" command to launch another kernel which can use the newly written disk image. If the flush was performed immediately it might overwrite the kexec command on the disk (in the input script) and there would be no way to launch the new kernel.
 
 
 ## The Hex0 Builder System Interface
 
-System calls are implemented with a POSIX i386 ABI interface.
+System calls are implemented according to a POSIX i386 ABI interface and are designed to be compatible with the Linux kernel.
 System calls are accessed via interrupt 0x80.
 
 The following system calls are implemented to some extent:
@@ -176,7 +189,7 @@ The kernel "simulates" a spawn pattern with this pattern:
 * Fork snapshots the process image and stack and returns as child.
 * execve overlays the child in the same address space as the parent.
 * When the child calls exit, the parent process and stack is restored and returns from the previous fork again, as parent
-* The parent calls waitpid which returns success because the child is already finished
+* The parent calls waitpid which returns immediately because the child is already finished
 
 ### File system
 
@@ -193,12 +206,15 @@ The kernel "simulates" a spawn pattern with this pattern:
     * Only the most recent file with the same name can be opened for read.
 
 * Only one argument is parsed for processes launched by the internal shell
-* A process launched by the internalshell cannot start with 's' or 'h'
+    * The execve system call supports multiple arguments and environmental variables
+      but you will need to build a better shell to utilize that capability.
+* A process launched by the internalshell cannot start with 's', 'h', or 'f'
+    * These letters are reserved for `src`, `hex0`, and `f` commands. Launch a better shell early to avoid this!
 * Each process argument can only be 255 bytes long + 1 terminating zero byte
 * Only one child can be forked at a time.
 * Each process cannot exceed 670,793,728 bytes of memory
 * The total memory for all (suspended) parent processes cannot exceed 603,979,775 bytes of memory
-* waitpid returns zero from the child, regardless of the child's actual exit code.
+* wait4 returns zero from the child, regardless of the child's actual exit code.
 
 * Unimplemented syscalls always succeed (eax = 0).
     * For example, chmod always succeeds but permissions are not saved or checked.
